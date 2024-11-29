@@ -1,0 +1,12 @@
+webapp :
+✅ abundance of element A  
+2. ratio of element A / element B
+3. abundance of element A on date X
+4.  ratio of element A / element B on date X
+
+5. Show somewhere total number of points plotted on map for a given element
+6. Able to visualise multiple elemental abundance together (only update label)
+7. Histogram of elemental abundances
+
+Database :
+1. update database, element_list from log files
