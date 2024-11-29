@@ -387,7 +387,7 @@
 </g>
 </svg>`;
       // tklabel;
-      let labelMark = `<div onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 15px;">${marker}</div><div class="seismicdata" style="display: none;width:90px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Lat: {lat}<br>Long: {long}<br>Abundance : {abundance}% <br> Date : {string}</h4></div></div>`;
+      let labelMark = `<div onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 15px;">${marker}</div><div class="seismicdata" style="display: none;width:90px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Lat: {lat}<br>Long: {long}<br>Element : {element} <br> Abundance : {abundance}% <br> Date : {string}</h4></div></div>`;
 
       let years = [
         "1969",
@@ -655,6 +655,7 @@
               // if (d.nak) {
               el.innerHTML = labelMark
                 .replace("{string}", d.date)
+                .replace("{element}", d.element)
                 // .replace(
                 //   "{string}",
                 //   new Date(d.year, d.month, d.day).toDateString()
@@ -869,6 +870,7 @@
           // markdata.lng = markdata.lang;
           markdata.forEach((obj) => {
             obj.lng = obj.long; // Create the new key with the same value
+            obj.element = element;
             // delete obj.lang;     // Delete the old key
           });
           await moon.htmlElementsData(markdata);
