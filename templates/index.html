@@ -241,6 +241,17 @@
         <div nakNum="2" style="margin: 20px 0px">
           <h3 class="nakEvent">Ti</h3>
         </div>
+
+        <!-- Add second element selector -->
+        <div style="margin: 20px 0px; border-top: 1px solid white; padding-top: 10px;">
+          <h3 style="color: white;">Select Second Element (Optional)</h3>
+          <select id="secondElement" style="background: rgba(0,0,0,0.7); color: white; border: 1px solid white; padding: 5px;">
+            <option value="">None</option>
+            <option value="Al">Al</option>
+            <option value="Si">Si</option>
+            <option value="Ti">Ti</option>
+          </select>
+        </div>
       </div>
       <button id="clearMap">Clear Map</button>
     </div>
@@ -387,7 +398,13 @@
 </g>
 </svg>`;
       // tklabel;
-      let labelMark = `<div onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 15px;">${marker}</div><div class="seismicdata" style="display: none;width:90px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Lat: {lat}<br>Long: {long}<br>Element : {element} <br> Abundance : {abundance}% <br> Date : {string}</h4></div></div>`;
+      function getMarkerColor(abundance) {
+        if (abundance < 33) return '#FF0000';  // Red
+        if (abundance > 66) return '#00FF00';  // Green
+        return '#0000FF';  // Blue
+      }
+
+      let labelMark = `<div onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 15px;">${marker}</div><div class="seismicdata" style="display: none;width:120px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Lat: {lat}<br>Long: {long}<br>Element : {element} <br> Abundance : {abundance}% <br> {ratio_text} Date : {string}</h4></div></div>`;
 
       let years = [
         "1969",
@@ -511,7 +528,7 @@
         element2 = null,
         date = null
       ) {
-        let url = `http://127.0.0.1:5000/${type}?element=${element1}`;
+        let url = `http://127.0.0.1:3000/${type}?element=${element1}`;
 
         if (element2) url += `&element2=${element2}`;
         if (date) url += `&date=${date}`;
@@ -536,38 +553,30 @@
         }
       }
 
+      // Fix the getAbundance function
       async function getAbundance(element, date = null) {
-        // Construct the URL with query parameters
-        let url = `/abundance?element=${encodeURIComponent(element)}`;
-
+        if (!element) return []; // Return empty array if no element provided
+        
+        // Use port 3000 and add leading slash
+        let url = `http://127.0.0.1:3000/abundance?element=${encodeURIComponent(element)}`;
+        
         if (date) {
           url += `&date=${encodeURIComponent(date)}`;
         }
-
+      
         try {
-          // Make the GET request
           const response = await fetch(url);
-
-          // If response is ok, parse the JSON data
+          const data = await response.json();
+          
           if (response.ok) {
-            const data = await response.json();
-            // console.log("Abundance data:", data); // Handle the response data here
-            console.log("got back data");
-            console.log(data[0]);
-
-            return data; // Return the JSON array
+            return data;
           } else {
-            // Handle error if the response is not OK (e.g., 400 or 500)
-            console.error(
-              "Error fetching abundance data:",
-              response.statusText
-            );
-            return null; // Return null or handle the error as needed
+            console.error("Server error:", data.error || "Unknown error");
+            return [];
           }
         } catch (error) {
-          // Handle network or other errors
-          console.error("Error:", error);
-          return null; // Return null or handle the error as needed
+          console.error("Fetch error:", error);
+          return [];
         }
       }
 
@@ -650,20 +659,20 @@
           .htmlElementsData(markdata)
           .htmlElement((d) => {
             const el = document.createElement("div");
-
+            
             if (true) {
-              // if (d.nak) {
+              // Generate ratio text only if ratio data exists
+              const ratioText = d.ratio ? `Ratio ${d.element}/${d.ratio_element}: ${d.ratio.toFixed(3)}<br>` : '';
+              const markerColor = getMarkerColor(d.abundance);
+              
               el.innerHTML = labelMark
                 .replace("{string}", d.date)
                 .replace("{element}", d.element)
-                // .replace(
-                //   "{string}",
-                //   new Date(d.year, d.month, d.day).toDateString()
-                // )
                 .replace("{lat}", d.lat)
                 .replace("{long}", d.lng)
-                .replace("{abundance}", d.abundance);
-              // .replace("{magn}", d.mgn);
+                .replace("{abundance}", d.abundance)
+                .replace("{ratio_text}", ratioText)
+                .replace("{color}", markerColor);
             } else {
               let apolloMarks = `<div class="someclasses" svalue="${d.svalue}" onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 20px;">${landingSite}</div><div class="seismicdata" style="display: none;width:90px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Mission: {miss}<br>Name: {na}<br>Lat: {lat}<br>Long: {long}</h4></div></div>`;
 
@@ -824,93 +833,69 @@
         //   // moon.ringsData(gData);
         // });
 
+        // Update the showNaka function to handle errors better
         async function showNaka(event) {
-          let index = event.currentTarget.getAttribute("nakNum");
-          let type1 = "abundance";
-          let element = element_list[index];
-          console.log("fetchinf for " + element);
-
-          markdata = [];
-          gData = [];
-          let divs = document.querySelectorAll(".nakEvent");
-          for (const child of divs) {
-            child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+          if (!event.currentTarget || !event.currentTarget.hasAttribute("nakNum")) {
+            console.error("Invalid event target");
+            return;
           }
-
-          // const data = await callPythonScript(index, type1);
-          // console.log("Index plot");
-
-          event.currentTarget.children[0].style.backgroundColor =
-            "rgba(192, 192, 192, 0.6)";
-
-          // markdata.push({
-          //   // nak: true,
-          //   lat: nakaData[index].lat,
-          //   lng: nakaData[index].long,
-          //   size: nakaData[index].magn * 10,
-          //   year: nakaData[index].year,
-          //   day: nakaData[index].day,
-          //   month: nakaData[index].month,
-          //   mgn: nakaData[index].magn,
-          //   tkval2: nakaData[index].tkval,
-          // });
-
-          // new_markdata = [];
-          // markdata.forEach((data) => {
-          //   new_markdata.push({
-          //     lat: data.lat,
-          //     lng: data.long,
-          //   });
-          // });
-
-          // markdata = await getAbundance(element);
-          // moon.htmlElementsData(markdata);
-
-          markdata = await getAbundance(element);
-          // markdata.lng = markdata.lang;
-          markdata.forEach((obj) => {
-            obj.lng = obj.long; // Create the new key with the same value
-            obj.element = element;
-            // delete obj.lang;     // Delete the old key
-          });
-          await moon.htmlElementsData(markdata);
-
-          // console.log("after await");
-          // console.log(moon.htmlElementsData);
-          // await new Promise((resolve) => {
-          //   console.log(moon.htmlElementsData);
-          //   resolve();
-          // });
-
-          // markdata = await getAbundance(element);
-          // console.log("got back markdata");
-          // console.log(typeof markdata);
-          // console.log(markdata);
-
-          // Old
-          // gData.push({
-          //   lat: nakaData[index].lat,
-          //   lng: nakaData[index].long,
-          // });
-
-          // console.log("below is gdarta");
-          // console.log(gData);
-          // console.log(gData[0]);
-          // console.log(typeof gData[0]);
-
-          // New
-          gData = [];
-          markdata.forEach((data) => {
-            gData.push({
-              lat: data.lat,
-              lng: data.long,
-              maxR: 30,
+        
+          let index = event.currentTarget.getAttribute("nakNum");
+          let element = element_list[index];
+          
+          if (!element) {
+            console.error("No element selected");
+            return;
+          }
+        
+          let secondElement = document.getElementById("secondElement").value;
+          
+          clearMapData();
+          
+          event.currentTarget.children[0].style.backgroundColor = "rgba(192, 192, 192, 0.6)";
+        
+          // Fetch abundance data
+          markdata = await getAbundance(element) || [];
+          
+          if (markdata.length === 0) {
+            console.warn("No abundance data received");
+            return;
+          }
+        
+          // If second element selected, fetch ratio data
+          if (secondElement) {
+            const ratioData = await fetchPllottingData('ratio', element, secondElement) || [];
+            
+            // Merge ratio data with abundance data
+            markdata = markdata.map(item => {
+              const ratioPoint = ratioData.find(r => r.lat === item.lat && r.long === item.long);
+              return {
+                ...item,
+                lng: item.long,
+                element: element,
+                ratio: ratioPoint ? ratioPoint.ratio : null,
+                ratio_element: secondElement
+              };
             });
-          });
-
-          // console.log("got back gdata");
-          // console.log(gData);
-
+          } else {
+            markdata = markdata.map(item => ({
+              ...item,
+              lng: item.long,
+              element: element
+            }));
+          }
+        
+          // Update the display
+          moon.htmlElementsData(markdata);
+        
+          // Update rings
+          gData = markdata.map(data => ({
+            lat: data.lat,
+            lng: data.long,
+            maxR: 2,  // Smaller fixed radius for circles
+            abundance: data.abundance,  // Pass abundance for coloring
+            ringWidth: 0.5  // Thinner rings for better visibility
+          }));
           moon.ringsData(gData);
         }
 
@@ -920,6 +905,15 @@
           child.style.cursor = "pointer";
           child.addEventListener("click", showNaka);
         }
+
+        // Add event listener for second element changes
+        document.getElementById("secondElement").addEventListener("change", async (event) => {
+          // Retrigger the currently selected element's data fetch
+          const activeElement = document.querySelector('.nakEvent[style*="background-color: rgba(192, 192, 192, 0.6)"]');
+          if (activeElement) {
+            activeElement.parentElement.click();
+          }
+        });
       }
 
       getData();

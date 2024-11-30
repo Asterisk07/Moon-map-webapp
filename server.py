@@ -89,34 +89,55 @@ def run_python_script():
 def get_abundance():
     element = request.args.get('element')
     date = request.args.get('date')  # Optional parameter
-    print(f"fetching for : element{element}, date : {date}")
+    
+    if not element or element == 'undefined':
+        return jsonify({"error": "Element parameter is required"}), 400
 
-    if date:
-        query = "SELECT * FROM abundances WHERE element = ? AND date = ?"
-        data = (element, date)
-    else:
-        query = "SELECT * FROM abundances WHERE element = ?"
-        data = (element,)
+    print(f"Fetching for: element={element}, date={date}")
 
-    # query_db is a helper function for querying SQLite
-    result = query_db(query, data)
-    print(result[0])
-    result = jsonify(result)
-    # print(result[0])
-    return result
+    try:
+        if date:
+            query = "SELECT * FROM abundances WHERE element = ? AND date = ?"
+            data = (element, date)
+        else:
+            query = "SELECT * FROM abundances WHERE element = ?"
+            data = (element,)
+
+        result = query_db(query, data)
+        if not result:
+            return jsonify([])  # Return empty array if no results
+            
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Database error: {str(e)}")
+        return jsonify({"error": "Database error"}), 500
 
 
 @app.route('/ratio', methods=['GET'])
 def get_ratio():
-    element1 = request.args.get('element1')
+    element1 = request.args.get('element')
     element2 = request.args.get('element2')
     date = request.args.get('date')  # Optional parameter
 
+    if not element1 or not element2:
+        return jsonify({"error": "Both elements are required"}), 400
+
     if date:
-        query = "SELECT * FROM element_ratios WHERE element1 = ? AND element2 = ? AND date = ?"
+        query = """
+            SELECT a1.lat, a1.long, a1.abundance/a2.abundance as ratio, a1.date
+            FROM abundances a1
+            JOIN abundances a2 ON a1.lat = a2.lat AND a1.long = a2.long AND a1.date = a2.date
+            WHERE a1.element = ? AND a2.element = ? AND a1.date = ?
+        """
         data = (element1, element2, date)
     else:
-        query = "SELECT * FROM element_ratios WHERE element1 = ? AND element2 = ?"
+        query = """
+            SELECT a1.lat, a1.long, a1.abundance/a2.abundance as ratio, a1.date
+            FROM abundances a1
+            JOIN abundances a2 ON a1.lat = a2.lat AND a1.long = a2.long
+            WHERE a1.element = ? AND a2.element = ?
+        """
         data = (element1, element2)
 
     result = query_db(query, data)
