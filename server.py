@@ -1,8 +1,14 @@
-import pandas as pd
-import sqlite3
-from flask import Flask, request, jsonify, render_template
-import subprocess
 import json
+import subprocess
+from flask import Flask, request, jsonify, render_template
+import sqlite3
+import pandas as pd
+FETCH_LIMIT = 10
+# FETCH_LIMIT = None
+
+# DATABASE_PATH = 'database/abundances_old.db'
+DATABASE_PATH = 'database/abundances.db'
+
 
 # import os
 # script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -10,9 +16,6 @@ import json
 
 app = Flask(__name__)
 # app = Flask(__name__, static_folder='.', static_url_path='')
-
-DATABASE_PATH = 'database/abundances.db'
-# DATABASE_PATH = 'path/to/your/database.db'
 
 
 # def query_db(query, params=()):
@@ -29,9 +32,13 @@ DATABASE_PATH = 'database/abundances.db'
 #     return [dict(row) for row in results]
 
 
-def query_db(query, params=()):
+def query_db(query, params=(), limit=FETCH_LIMIT):
     db_path = DATABASE_PATH
     connection = sqlite3.connect(db_path)
+
+    # Add LIMIT clause if a limit is specified
+    if limit is not None:
+        query += f" LIMIT {limit}"
 
     # Using pandas to read the query result directly into a DataFrame
     df = pd.read_sql_query(query, connection, params=params)
@@ -89,7 +96,7 @@ def run_python_script():
 def get_abundance():
     element = request.args.get('element')
     date = request.args.get('date')  # Optional parameter
-    
+
     if not element or element == 'undefined':
         return jsonify({"error": "Element parameter is required"}), 400
 
@@ -106,9 +113,9 @@ def get_abundance():
         result = query_db(query, data)
         if not result:
             return jsonify([])  # Return empty array if no results
-            
+
         return jsonify(result)
-        
+
     except Exception as e:
         print(f"Database error: {str(e)}")
         return jsonify({"error": "Database error"}), 500

@@ -231,25 +231,53 @@
       >
         <!-- tk harcoded change this -->
         <div nakNum="0" style="margin: 20px 0px">
-          <h3 class="nakEvent">Al</h3>
+          <h3 class="nakEvent">Fe</h3>
         </div>
-
         <div nakNum="1" style="margin: 20px 0px">
+          <h3 class="nakEvent">Ti</h3>
+        </div>
+        <div nakNum="2" style="margin: 20px 0px">
+          <h3 class="nakEvent">Ca</h3>
+        </div>
+        <div nakNum="3" style="margin: 20px 0px">
           <h3 class="nakEvent">Si</h3>
         </div>
-
-        <div nakNum="2" style="margin: 20px 0px">
-          <h3 class="nakEvent">Ti</h3>
+        <div nakNum="4" style="margin: 20px 0px">
+          <h3 class="nakEvent">Al</h3>
+        </div>
+        <div nakNum="5" style="margin: 20px 0px">
+          <h3 class="nakEvent">Mg</h3>
+        </div>
+        <div nakNum="6" style="margin: 20px 0px">
+          <h3 class="nakEvent">Na</h3>
         </div>
 
         <!-- Add second element selector -->
-        <div style="margin: 20px 0px; border-top: 1px solid white; padding-top: 10px;">
-          <h3 style="color: white;">Select Second Element (Optional)</h3>
-          <select id="secondElement" style="background: rgba(0,0,0,0.7); color: white; border: 1px solid white; padding: 5px;">
+        <div
+          style="
+            margin: 20px 0px;
+            border-top: 1px solid white;
+            padding-top: 10px;
+          "
+        >
+          <h3 style="color: white">Select Second Element (Optional)</h3>
+          <select
+            id="secondElement"
+            style="
+              background: rgba(0, 0, 0, 0.7);
+              color: white;
+              border: 1px solid white;
+              padding: 5px;
+            "
+          >
             <option value="">None</option>
-            <option value="Al">Al</option>
-            <option value="Si">Si</option>
+            <option value="Fe">Fe</option>
             <option value="Ti">Ti</option>
+            <option value="Ca">Ca</option>
+            <option value="Si">Si</option>
+            <option value="Al">Al</option>
+            <option value="Mg">Mg</option>
+            <option value="Na">Na</option>
           </select>
         </div>
       </div>
@@ -399,9 +427,9 @@
 </svg>`;
       // tklabel;
       function getMarkerColor(abundance) {
-        if (abundance < 33) return '#FF0000';  // Red
-        if (abundance > 66) return '#00FF00';  // Green
-        return '#0000FF';  // Blue
+        if (abundance < 33) return "#FF0000"; // Red
+        if (abundance > 66) return "#00FF00"; // Green
+        return "#0000FF"; // Blue
       }
 
       let labelMark = `<div onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 15px;">${marker}</div><div class="seismicdata" style="display: none;width:120px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Lat: {lat}<br>Long: {long}<br>Element : {element} <br> Abundance : {abundance}% <br> {ratio_text} Date : {string}</h4></div></div>`;
@@ -486,7 +514,8 @@
     <div id="globeViz"></div>
 
     <script>
-      let element_list = ["Al", "Si", "Ti"];
+      // let element_list = ["Al", "Si", "Ti"];
+      let element_list = ["Fe", "Ti", "Ca", "Si", "Al", "Mg", "Na"];
       const colorScale = d3.scaleOrdinal([
         "orangered",
         "mediumblue",
@@ -556,18 +585,20 @@
       // Fix the getAbundance function
       async function getAbundance(element, date = null) {
         if (!element) return []; // Return empty array if no element provided
-        
+
         // Use port 3000 and add leading slash
-        let url = `http://127.0.0.1:3000/abundance?element=${encodeURIComponent(element)}`;
-        
+        let url = `http://127.0.0.1:3000/abundance?element=${encodeURIComponent(
+          element
+        )}`;
+
         if (date) {
           url += `&date=${encodeURIComponent(date)}`;
         }
-      
+
         try {
           const response = await fetch(url);
           const data = await response.json();
-          
+
           if (response.ok) {
             return data;
           } else {
@@ -659,12 +690,16 @@
           .htmlElementsData(markdata)
           .htmlElement((d) => {
             const el = document.createElement("div");
-            
+
             if (true) {
               // Generate ratio text only if ratio data exists
-              const ratioText = d.ratio ? `Ratio ${d.element}/${d.ratio_element}: ${d.ratio.toFixed(3)}<br>` : '';
+              const ratioText = d.ratio
+                ? `Ratio ${d.element}/${d.ratio_element}: ${d.ratio.toFixed(
+                    3
+                  )}<br>`
+                : "";
               const markerColor = getMarkerColor(d.abundance);
-              
+
               el.innerHTML = labelMark
                 .replace("{string}", d.date)
                 .replace("{element}", d.element)
@@ -835,66 +870,73 @@
 
         // Update the showNaka function to handle errors better
         async function showNaka(event) {
-          if (!event.currentTarget || !event.currentTarget.hasAttribute("nakNum")) {
+          if (
+            !event.currentTarget ||
+            !event.currentTarget.hasAttribute("nakNum")
+          ) {
             console.error("Invalid event target");
             return;
           }
-        
+
           let index = event.currentTarget.getAttribute("nakNum");
           let element = element_list[index];
-          
+
           if (!element) {
             console.error("No element selected");
             return;
           }
-        
+
           let secondElement = document.getElementById("secondElement").value;
-          
+
           clearMapData();
-          
-          event.currentTarget.children[0].style.backgroundColor = "rgba(192, 192, 192, 0.6)";
-        
+
+          event.currentTarget.children[0].style.backgroundColor =
+            "rgba(192, 192, 192, 0.6)";
+
           // Fetch abundance data
-          markdata = await getAbundance(element) || [];
-          
+          markdata = (await getAbundance(element)) || [];
+
           if (markdata.length === 0) {
             console.warn("No abundance data received");
             return;
           }
-        
+
           // If second element selected, fetch ratio data
           if (secondElement) {
-            const ratioData = await fetchPllottingData('ratio', element, secondElement) || [];
-            
+            const ratioData =
+              (await fetchPllottingData("ratio", element, secondElement)) || [];
+
             // Merge ratio data with abundance data
-            markdata = markdata.map(item => {
-              const ratioPoint = ratioData.find(r => r.lat === item.lat && r.long === item.long);
+            markdata = markdata.map((item) => {
+              const ratioPoint = ratioData.find(
+                (r) => r.lat === item.lat && r.long === item.long
+              );
               return {
                 ...item,
                 lng: item.long,
                 element: element,
                 ratio: ratioPoint ? ratioPoint.ratio : null,
-                ratio_element: secondElement
+                ratio_element: secondElement,
               };
             });
           } else {
-            markdata = markdata.map(item => ({
+            markdata = markdata.map((item) => ({
               ...item,
               lng: item.long,
-              element: element
+              element: element,
             }));
           }
-        
+
           // Update the display
           moon.htmlElementsData(markdata);
-        
+
           // Update rings
-          gData = markdata.map(data => ({
+          gData = markdata.map((data) => ({
             lat: data.lat,
             lng: data.long,
-            maxR: 2,  // Smaller fixed radius for circles
-            abundance: data.abundance,  // Pass abundance for coloring
-            ringWidth: 0.5  // Thinner rings for better visibility
+            maxR: 2, // Smaller fixed radius for circles
+            abundance: data.abundance, // Pass abundance for coloring
+            ringWidth: 0.5, // Thinner rings for better visibility
           }));
           moon.ringsData(gData);
         }
@@ -907,13 +949,17 @@
         }
 
         // Add event listener for second element changes
-        document.getElementById("secondElement").addEventListener("change", async (event) => {
-          // Retrigger the currently selected element's data fetch
-          const activeElement = document.querySelector('.nakEvent[style*="background-color: rgba(192, 192, 192, 0.6)"]');
-          if (activeElement) {
-            activeElement.parentElement.click();
-          }
-        });
+        document
+          .getElementById("secondElement")
+          .addEventListener("change", async (event) => {
+            // Retrigger the currently selected element's data fetch
+            const activeElement = document.querySelector(
+              '.nakEvent[style*="background-color: rgba(192, 192, 192, 0.6)"]'
+            );
+            if (activeElement) {
+              activeElement.parentElement.click();
+            }
+          });
       }
 
       getData();
