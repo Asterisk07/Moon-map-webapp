@@ -740,6 +740,12 @@
               let stationNum =
                 event.currentTarget.children[0].getAttribute("svalue");
 
+              // if (globDict.stations.includes(stationNum)) {
+              //   let filePath = `./plots/${stationNum}/${selectedYear}/${globDict.doy}/${stationNum}_${selectedYear}_${globDict.doy}_mh_plot.png`;
+
+              //   document.getElementById("plots").src = filePath;
+              //   document.getElementById("cont").style.display = "block";
+              // }
             };
             return el;
           })
@@ -761,7 +767,10 @@
 
   // Function to update the info panel
   function updateInfoPanel() {
-    const cursorPos = controls.target;      
+    // const zoomLevel = camera.position.length(); // Camera distance (proxy for zoom)
+    // const spatialResolution = 1 / zoomLevel;    // Example resolution calculation
+    const cursorPos = controls.target;          // Cursor position in world space (globe center point)
+
 
     const fov = camera.fov * (Math.PI / 180); // Convert FOV to radians
     const distance = camera.position.length();
@@ -816,10 +825,61 @@
           moon.htmlElementsData([]);
         }
 
+        // function getReqDate() {
+        //   selectedYear =
+        //     parseInt(document.getElementById("yearslider").value) + 1969;
+
+        //   selectedMonth =
+        //     parseInt(document.getElementById("monthslider").value) + 1;
+
+        //   selectedDay = parseInt(document.getElementById("dayslider").value);
+
+        //   globDict = plot_data[selectedYear][selectedMonth][selectedDay];
+
+        //   markdata = [];
+
+        //   for (let index = 0; index < apolloSeismic.length; index++) {
+        //     if (
+        //       globDict.stations.includes(
+        //         `s${apolloSeismic[index].mission.split(" ")[1]}`
+        //       )
+        //     ) {
+        //       markdata.push({
+        //         nak: false,
+        //         lat: apolloSeismic[index].lat,
+        //         lng: apolloSeismic[index].lng,
+        //         mission: apolloSeismic[index].mission,
+        //         name: apolloSeismic[index].name,
+        //         svalue: `s${apolloSeismic[index].mission.split(" ")[1]}`,
+        //       });
+        //     }
+        //   }
+
+        //   moon.htmlElementsData(markdata);
+        // }
+
+        // document
+        //   .getElementById("getData")
+        //   .addEventListener("click", getReqDate);
 
         document.getElementById("nak").addEventListener("click", clearTab);
 
-       
+        // document
+        //   .getElementById("clearMap")
+        //   .addEventListener("click", (event) => {
+        //     markdata = [];
+
+        //     gData = [];
+
+        //     moon.ringsData([]);
+        //     moon.htmlElementsData([]);
+
+        //     let divs = document.querySelectorAll(".nakEvent");
+
+        //     for (const child of divs) {
+        //       child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+        //     }
+        //   });
 
         // Function to clear map and reset data
         function clearMapData() {
@@ -845,7 +905,30 @@
             clearMapData(); // Call the function when the button is clicked
           });
 
-   
+        // document.getElementById("con").addEventListener("click", (event) => {
+        //   document.getElementById("nakamura").style.display = "none";
+        //   document.getElementById("contdata").style.display = "block";
+        //   document.getElementById("nak").style.borderBottom = "none";
+        //   document.getElementById("con").style.borderBottom = "2px solid white";
+
+        //   markdata = [];
+        //   gData = [];
+
+        //   // for (let index = 0; index < apolloSeismic.length; index++) {
+        //   //   markdata.push({
+        //   //     nak: false,
+        //   //     lat: apolloSeismic[index].lat,
+        //   //     lng: apolloSeismic[index].lng,
+        //   //     mission: apolloSeismic[index].mission,
+        //   //     name: apolloSeismic[index].name,
+        //   //     svalue: `s${apolloSeismic[index].mission.split(" ")[1]}`,
+        //   //   });
+        //   // }
+
+        //   moon.htmlElementsData(markdata);
+        //   // moon.ringsData(gData);
+        // });
+
         // Update the showNaka function to handle errors better
         async function showNaka(event) {
           if (
