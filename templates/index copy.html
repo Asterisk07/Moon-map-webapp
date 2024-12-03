@@ -29,38 +29,15 @@
       font-size: 14px;
       border-radius: 8px;
     }
-
-     /* Heatmap Legend Styles */
-     #legend {
-        position: absolute;
-        bottom: 20px;
-        left: 20px;
-        width: 200px;
-        height: 30px;
-        /* background: linear-gradient(to right, red, yellow, blue); */
-        background: linear-gradient(to right, blue, yellow, red);
-        border: 1px solid #ccc;
-        z-index: 100;
-      }
-      #legend-labels {
-        position: absolute;
-        bottom: 50px;
-        left: 20px;
-        width: 200px;
-        display: flex;
-        justify-content: space-between;
-        color: white;
-      }
-
   </style>
     </style>
 
     <script src="https://unpkg.com/d3-array"></script>
     <script src="https://unpkg.com/d3-scale"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-
 
     <script src="https://unpkg.com/globe.gl"></script>
+    <!-- <script src="../../dist/globe.gl.js"></script> -->
+
     <link rel="stylesheet" href="../static/style.css" />
   </head>
 
@@ -84,6 +61,18 @@
           text-align: center;
         "
       >
+        <!-- <h2
+          id="con"
+          style="
+            box-sizing: border-box;
+            border-bottom: 2px solid white;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+          "
+        >
+          Timeline
+        </h2> -->
         <h2
           id="nak"
           style="
@@ -98,7 +87,130 @@
       </div>
     </div>
 
-  
+    <div
+      id="contdata"
+      style="
+        position: absolute;
+        z-index: 20;
+        top: 55px;
+        width: 400px;
+        background-color: rgba(0, 0, 0, 0.7);
+      "
+    >
+      <h1
+        style="
+          font-size: 30px;
+          font-weight: bold;
+          color: white;
+          text-align: center;
+          margin: 8px 0 8px 0;
+        "
+      >
+        Moonquake Map
+      </h1>
+      <div class="" style="text-align: center">
+        <h3 style="font-size: 20px; color: white; font-weight: bold">Year</h3>
+        <input
+          id="yearslider"
+          min="0"
+          max="0"
+          value="0"
+          type="range"
+          class="form-range"
+          style="width: 80%"
+        />
+        <div style="margin-top: 5px">
+          <label
+            id="yearlabel"
+            for="customRange1"
+            class="form-label"
+            style="
+              display: inline-block;
+              padding: 0 8px 0 8px;
+              text-align: center;
+              font-size: 25px;
+              border-radius: 5px;
+              padding: 0px 8px 0 8px;
+              background-color: rgba(255, 255, 255, 0.6);
+            "
+            >1969</label
+          >
+        </div>
+
+        <h3 style="font-size: 20px; color: white; font-weight: bold">Month</h3>
+        <input
+          id="monthslider"
+          min="0"
+          max="0"
+          value="0"
+          type="range"
+          class="form-range"
+          style="width: 80%"
+        />
+        <div style="margin-top: 5px">
+          <label
+            id="monthlabel"
+            for="customRange1"
+            class="form-label"
+            style="
+              display: inline-block;
+              padding: 0 8px 0 8px;
+              text-align: center;
+              font-size: 25px;
+              border-radius: 5px;
+              padding: 0px 8px 0 8px;
+              background-color: rgba(255, 255, 255, 0.6);
+            "
+            >Jan</label
+          >
+        </div>
+
+        <h3 style="font-size: 20px; color: white; font-weight: bold">Day</h3>
+        <input
+          id="dayslider"
+          min="1"
+          max="1"
+          value="1"
+          type="range"
+          class="form-range"
+          style="width: 80%"
+        />
+        <div style="margin-top: 5px">
+          <label
+            id="daylabel"
+            for="customRange1"
+            class="form-label"
+            style="
+              display: inline-block;
+              padding: 0 8px 0 8px;
+              text-align: center;
+              font-size: 25px;
+              border-radius: 5px;
+              padding: 0px 8px 0 8px;
+              background-color: rgba(255, 255, 255, 0.6);
+            "
+            >1</label
+          >
+        </div>
+
+        <button
+          id="getData"
+          style="
+            margin-top: 10px;
+            border: 1px solid white;
+            background-color: black;
+            color: white;
+            border-radius: 5px;
+            font-size: 20px;
+            text-align: center;
+            padding: 4px 8px 4px 8px;
+          "
+        >
+          Show Data
+        </button>
+      </div>
+    </div>
+
     <div
       id="nakamura"
       style="
@@ -111,7 +223,17 @@
         text-align: center;
       "
     >
-      
+      <!-- <h1
+        style="
+          font-size: 30px;
+          font-weight: bold;
+          color: white;
+          text-align: center;
+          margin: 8px 0 8px 0;
+        "
+      >
+        Nakamura Seismic Events
+      </h1> -->
       <div
         id="naklabels"
         style="
@@ -353,75 +475,69 @@
         "Dec",
       ];
 
-      // document
-      //   .getElementById("yearslider")
-      //   .addEventListener("input", (event) => {
-      //     document.getElementById("yearlabel").innerText =
-      //       years[event.target.value];
+      document
+        .getElementById("yearslider")
+        .addEventListener("input", (event) => {
+          document.getElementById("yearlabel").innerText =
+            years[event.target.value];
 
-      //     let curYear = parseInt(event.target.value) + 1969;
+          let curYear = parseInt(event.target.value) + 1969;
 
-      //     let currMonth = parseInt(
-      //       document.getElementById("monthslider").value
-      //     );
+          let currMonth = parseInt(
+            document.getElementById("monthslider").value
+          );
 
-      //     let date = new Date(curYear, currMonth + 1, 0);
+          let date = new Date(curYear, currMonth + 1, 0);
 
-      //     let dayslider = document.getElementById("dayslider");
+          let dayslider = document.getElementById("dayslider");
 
-      //     dayslider.setAttribute("max", date.getDate());
-      //     dayslider.value = 1;
-      //     document.getElementById("daylabel").innerText = 1;
-      //   });
+          dayslider.setAttribute("max", date.getDate());
+          dayslider.value = 1;
+          document.getElementById("daylabel").innerText = 1;
+        });
 
       document
-      //   .getElementById("monthslider")
-      //   .addEventListener("input", (event) => {
-      //     document.getElementById("monthlabel").innerText =
-      //       months[event.target.value];
+        .getElementById("monthslider")
+        .addEventListener("input", (event) => {
+          document.getElementById("monthlabel").innerText =
+            months[event.target.value];
 
-      //     let curYear =
-      //       parseInt(document.getElementById("yearslider").value) + 1969;
+          let curYear =
+            parseInt(document.getElementById("yearslider").value) + 1969;
 
-      //     let currMonth = parseInt(
-      //       document.getElementById("monthslider").value
-      //     );
+          let currMonth = parseInt(
+            document.getElementById("monthslider").value
+          );
 
-      //     let date = new Date(curYear, currMonth + 1, 0);
+          let date = new Date(curYear, currMonth + 1, 0);
 
-      //     let dayslider = document.getElementById("dayslider");
+          let dayslider = document.getElementById("dayslider");
 
-      //     dayslider.setAttribute("max", date.getDate());
-      //     dayslider.value = 1;
-      //     document.getElementById("daylabel").innerText = 1;
-      //   });
+          dayslider.setAttribute("max", date.getDate());
+          dayslider.value = 1;
+          document.getElementById("daylabel").innerText = 1;
+        });
 
-      // document
-      //   .getElementById("dayslider")
-      //   .addEventListener("input", (event) => {
-      //     document.getElementById("daylabel").innerText = event.target.value;
-      //   });
+      document
+        .getElementById("dayslider")
+        .addEventListener("input", (event) => {
+          document.getElementById("daylabel").innerText = event.target.value;
+        });
     </script>
 
     <div id="globeViz"></div>
 
     <div id="info-panel"></div>
 
-     <!-- Heatmap Legend -->
-     <div id="legend"></div>
-     <div id="legend-labels">
-       <span>Low</span>
-       <span>Medium</span>
-       <span>High</span>
-     </div>
-
     <script>
       // let element_list = ["Al", "Si", "Ti"];
       let element_list = ["Fe", "Ti", "Ca", "Si", "Al", "Mg", "Na"];
-      // Define the color scale for the heatmap
-      let colorScale = d3
-        .scaleSequential(d3.interpolateRdYlBu)
-        .domain([0, 100]);
+      const colorScale = d3.scaleOrdinal([
+        "orangered",
+        "mediumblue",
+        "darkgreen",
+        "yellow",
+      ]);
 
       const labelsTopOrientation = new Set([
         "Apollo 12",
@@ -572,7 +688,7 @@
       }
 
       function start() {
-        // document.getElementById("contdata").style.display = "none";
+        document.getElementById("contdata").style.display = "none";
         document.getElementById("nakamura").style.display = "block";
         const moon = Globe()
           .globeImageUrl("../static/lunar_surface.jpg")
@@ -598,27 +714,25 @@
                     3
                   )}<br>`
                 : "";
-              // const markerColor = getMarkerColor(d.abundance);
-              const color = colorScale(d.abundance);
+              const markerColor = getMarkerColor(d.abundance);
 
-const markerSvg = `<svg width="15" height="15" viewBox="0 0 512 512"><circle cx="256" cy="256" r="256" fill="${color}" /></svg>`;
+              el.innerHTML = labelMark
+                .replace("{string}", d.date)
+                .replace("{element}", d.element)
+                .replace("{lat}", d.lat)
+                .replace("{long}", d.lng)
+                .replace("{abundance}", d.abundance)
+                .replace("{ratio_text}", ratioText)
+                .replace("{color}", markerColor);
+            } else {
+              let apolloMarks = `<div class="someclasses" svalue="${d.svalue}" onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 20px;">${landingSite}</div><div class="seismicdata" style="display: none;width:90px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Mission: {miss}<br>Name: {na}<br>Lat: {lat}<br>Long: {long}</h4></div></div>`;
 
-el.innerHTML = `
-  <div onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';">
-    <div class="dangerIcon" style="width: 15px;">${markerSvg}</div>
-    <div class="seismicdata" style="display: none; width: 160px; position: absolute; top: 10px; left: 6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;">
-      <h4 style="font-size: 11px; color: white;">
-        Lat: ${d.lat.toFixed(2)}<br>
-        Long: ${d.lng.toFixed(2)}<br>
-        Element: ${d.element}<br>
-        Abundance: ${d.abundance.toFixed(2)}%<br>
-        ${ratioText}
-        Date: ${d.date || "N/A"}
-      </h4>
-    </div>
-  </div>
-`;
-            } 
+              el.innerHTML = apolloMarks
+                .replace("{lat}", d.lat)
+                .replace("{long}", d.lng)
+                .replace("{miss}", d.mission)
+                .replace("{na}", d.name);
+            }
 
             el.style["pointer-events"] = "auto";
             el.style.cursor = "pointer";
@@ -683,7 +797,7 @@ el.innerHTML = `
         const colorInterpolator = (t) => `rgba(255,100,50,${Math.sqrt(1 - t)})`;
 
         function clearTab(event) {
-          // document.getElementById("contdata").style.display = "none";
+          document.getElementById("contdata").style.display = "none";
           document.getElementById("nakamura").style.display = "block";
           // document.getElementById("con").style.borderBottom = "none";
           document.getElementById("nak").style.borderBottom = "2px solid white";
@@ -790,12 +904,6 @@ el.innerHTML = `
               element: element,
             }));
           }
-
-          // / Update the color scale domain based on the abundance values
-          const abundances = markdata.map((d) => d.abundance);
-          const minAbundance = Math.min(...abundances);
-          const maxAbundance = Math.max(...abundances);
-          colorScale.domain([minAbundance, maxAbundance]);
 
           // Update the display
           moon.htmlElementsData(markdata);

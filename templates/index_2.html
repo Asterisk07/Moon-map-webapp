@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Moon Elemental Abundance Visualization</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+      crossorigin="anonymous"
+    ></script>
+
+    <style>
+      body {
+        margin: 0;
+      }
+
+      #info-panel {
+        position: absolute;
+        top: 10px;
+        right: 200px;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        border-radius: 8px;
+      }
+
+      /* Heatmap Legend Styles */
+      #legend {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        width: 200px;
+        height: 30px;
+        background: linear-gradient(to right, blue, green, red);
+        border: 1px solid #ccc;
+        z-index: 100;
+      }
+      #legend-labels {
+        position: absolute;
+        bottom: 50px;
+        left: 20px;
+        width: 200px;
+        display: flex;
+        justify-content: space-between;
+        color: white;
+      }
+    </style>
+
+    <script src="https://unpkg.com/d3@7"></script>
+    <script src="https://unpkg.com/globe.gl"></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <div
+      id="menu"
+      style="
+        position: absolute;
+        z-index: 30;
+        width: 400px;
+        height: 50px;
+        background-color: rgba(0, 0, 0, 0.7);
+      "
+    >
+      <div
+        style="
+          display: flex;
+          justify-content: space-around;
+          align-items: center;
+          height: 100%;
+          text-align: center;
+        "
+      >
+        <h2
+          id="nak"
+          style="
+            box-sizing: border-box;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+          "
+        >
+          Plotting
+        </h2>
+      </div>
+    </div>
+
+    <div
+      id="nakamura"
+      style="
+        position: absolute;
+        top: 55px;
+        z-index: 20;
+        width: 400px;
+        background-color: rgba(0, 0, 0, 0.7);
+        text-align: center;
+      "
+    >
+      <div
+        id="naklabels"
+        style="
+          text-align: center;
+          margin-top: 10px;
+          height: 70vh;
+          overflow: scroll;
+        "
+      >
+        <div nakNum="0" style="margin: 20px 0px">
+          <h3 class="nakEvent">Fe</h3>
+        </div>
+        <div nakNum="1" style="margin: 20px 0px">
+          <h3 class="nakEvent">Ti</h3>
+        </div>
+        <div nakNum="2" style="margin: 20px 0px">
+          <h3 class="nakEvent">Ca</h3>
+        </div>
+        <div nakNum="3" style="margin: 20px 0px">
+          <h3 class="nakEvent">Si</h3>
+        </div>
+        <div nakNum="4" style="margin: 20px 0px">
+          <h3 class="nakEvent">Al</h3>
+        </div>
+        <div nakNum="5" style="margin: 20px 0px">
+          <h3 class="nakEvent">Mg</h3>
+        </div>
+        <div nakNum="6" style="margin: 20px 0px">
+          <h3 class="nakEvent">Na</h3>
+        </div>
+
+        <!-- Add second element selector -->
+        <div
+          style="
+            margin: 20px 0px;
+            border-top: 1px solid white;
+            padding-top: 10px;
+          "
+        >
+          <h3 style="color: white">Select Second Element (Optional)</h3>
+          <select
+            id="secondElement"
+            style="
+              background: rgba(0, 0, 0, 0.7);
+              color: white;
+              border: 1px solid white;
+              padding: 5px;
+            "
+          >
+            <option value="">None</option>
+            <option value="Fe">Fe</option>
+            <option value="Ti">Ti</option>
+            <option value="Ca">Ca</option>
+            <option value="Si">Si</option>
+            <option value="Al">Al</option>
+            <option value="Mg">Mg</option>
+            <option value="Na">Na</option>
+          </select>
+        </div>
+      </div>
+      <button id="clearMap">Clear Map</button>
+    </div>
+
+    <div id="globeViz"></div>
+    <div id="info-panel"></div>
+
+    <!-- Heatmap Legend -->
+    <div id="legend"></div>
+    <div id="legend-labels">
+      <span>Low</span>
+      <span>Medium</span>
+      <span>High</span>
+    </div>
+
+    <script>
+      const element_list = ["Fe", "Ti", "Ca", "Si", "Al", "Mg", "Na"];
+
+      const labelsTopOrientation = new Set([
+        "Apollo 12",
+        "Luna 2",
+        "Luna 20",
+        "Luna 21",
+        "Luna 24",
+        "LCROSS Probe",
+      ]);
+
+      let gData = [];
+      let markdata = [];
+      let moonland_data = [];
+
+      // Define the color scale for the heatmap
+      let colorScale = d3
+        .scaleSequential(d3.interpolateRdYlBu)
+        .domain([0, 100]);
+
+      async function fetchPlottingData(
+        type,
+        element1,
+        element2 = null,
+        date = null
+      ) {
+        let url = `http://127.0.0.1:3000/${type}?element=${element1}`;
+
+        if (element2) url += `&element2=${element2}`;
+        if (date) url += `&date=${date}`;
+
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Error: ${response.status}`);
+
+          const data = await response.json();
+
+          if (Array.isArray(data)) {
+            console.log("Data fetched:", data);
+            return data;
+          } else {
+            console.error("Unexpected data format. Expected an array.");
+            return [];
+          }
+        } catch (error) {
+          console.error("Fetch error:", error);
+          return [];
+        }
+      }
+
+      async function getAbundance(element, date = null) {
+        if (!element) return [];
+
+        let url = `http://127.0.0.1:3000/abundance?element=${encodeURIComponent(
+          element
+        )}`;
+
+        if (date) {
+          url += `&date=${encodeURIComponent(date)}`;
+        }
+
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+
+          if (response.ok) {
+            return data;
+          } else {
+            console.error("Server error:", data.error || "Unknown error");
+            return [];
+          }
+        } catch (error) {
+          console.error("Fetch error:", error);
+          return [];
+        }
+      }
+
+      async function getData() {
+        // Fetch moon landing data if needed
+        // For now, we'll just initialize the globe
+        start();
+      }
+
+      function start() {
+        const moon = Globe()
+          .globeImageUrl("lunar_surface.jpg")
+          .bumpImageUrl("lunar_bumpmap.jpg")
+          .backgroundImageUrl(
+            "https://unpkg.com/three-globe@2.24.7/example/img/night-sky.png"
+          )
+          .showGraticules(false)
+          .showAtmosphere(false)
+          .ringMaxRadius("maxR")
+          .ringPropagationSpeed("propagationSpeed")
+          .ringRepeatPeriod("repeatPeriod")
+          .htmlElementsData(markdata)
+          .htmlElement((d) => {
+            const el = document.createElement("div");
+            const ratioText = d.ratio
+              ? `Ratio ${d.element}/${d.ratio_element}: ${d.ratio.toFixed(
+                  3
+                )}<br>`
+              : "";
+            const color = colorScale(d.abundance);
+
+            const markerSvg = `<svg width="15" height="15" viewBox="0 0 512 512"><circle cx="256" cy="256" r="256" fill="${color}" /></svg>`;
+
+            el.innerHTML = `
+              <div onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';">
+                <div class="dangerIcon" style="width: 15px;">${markerSvg}</div>
+                <div class="seismicdata" style="display: none; width: 160px; position: absolute; top: 10px; left: 6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;">
+                  <h4 style="font-size: 11px; color: white;">
+                    Lat: ${d.lat.toFixed(2)}<br>
+                    Long: ${d.lng.toFixed(2)}<br>
+                    Element: ${d.element}<br>
+                    Abundance: ${d.abundance.toFixed(2)}%<br>
+                    ${ratioText}
+                    Date: ${d.date || "N/A"}
+                  </h4>
+                </div>
+              </div>
+            `;
+
+            el.style["pointer-events"] = "auto";
+            el.style.cursor = "pointer";
+            return el;
+          })
+          .labelText("label")
+          .labelSize(2.0)
+          .labelDotRadius(0.6)
+          .labelDotOrientation((d) =>
+            labelsTopOrientation.has(d.label) ? "top" : "bottom"
+          )
+          .labelColor(() => "lightskyblue")
+          .labelsData(moonland_data)(document.getElementById("globeViz"));
+
+        const camera = moon.camera();
+        const controls = moon.controls();
+        const infoPanel = document.getElementById("info-panel");
+
+        const UPDATE_INTERVAL = 1000;
+        let lastUpdateTime = 0;
+
+        function updateInfoPanel() {
+          const fov = camera.fov * (Math.PI / 180);
+          const distance = camera.position.length();
+          const projected_dim = 2 * Math.tan(fov / 2) * distance;
+          const resolution = projected_dim / window.innerWidth;
+
+          infoPanel.innerHTML = `
+            <strong>Globe Info:</strong><br>
+            Field of view: ${camera.fov.toFixed(2)} deg<br>
+            Distance from centre: ${distance.toFixed(2)} units<br>
+            Spatial Resolution: ${resolution.toFixed(5)} units/pixel<br>      
+            Projected diameter: ${projected_dim.toFixed(5)} units<br>      
+            Window size: ${window.innerWidth} pixels<br>      
+            Updated every ${UPDATE_INTERVAL} ms
+          `;
+        }
+
+        function animate(time) {
+          requestAnimationFrame(animate);
+          controls.update();
+
+          if (time - lastUpdateTime > UPDATE_INTERVAL) {
+            updateInfoPanel();
+            lastUpdateTime = time;
+          }
+        }
+
+        animate(0);
+
+        function clearTab() {
+          document.getElementById("nak").style.borderBottom = "2px solid white";
+
+          let divs = document.querySelectorAll(".nakEvent");
+
+          for (const child of divs) {
+            child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+          }
+
+          markdata = [];
+          gData = [];
+
+          moon.ringsData([]);
+          moon.htmlElementsData([]);
+        }
+
+        document.getElementById("nak").addEventListener("click", clearTab);
+
+        function clearMapData() {
+          markdata = [];
+          gData = [];
+          moon.ringsData([]);
+          moon.htmlElementsData([]);
+
+          let divs = document.querySelectorAll(".nakEvent");
+          for (const child of divs) {
+            child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+          }
+        }
+
+        document
+          .getElementById("clearMap")
+          .addEventListener("click", clearMapData);
+
+        async function showNaka(event) {
+          if (
+            !event.currentTarget ||
+            !event.currentTarget.hasAttribute("nakNum")
+          ) {
+            console.error("Invalid event target");
+            return;
+          }
+
+          let index = event.currentTarget.getAttribute("nakNum");
+          let element = element_list[index];
+
+          if (!element) {
+            console.error("No element selected");
+            return;
+          }
+
+          let secondElement = document.getElementById("secondElement").value;
+
+          clearMapData();
+
+          event.currentTarget.children[0].style.backgroundColor =
+            "rgba(192, 192, 192, 0.6)";
+
+          markdata = (await getAbundance(element)) || [];
+
+          if (markdata.length === 0) {
+            console.warn("No abundance data received");
+            return;
+          }
+
+          if (secondElement) {
+            const ratioData =
+              (await fetchPlottingData("ratio", element, secondElement)) || [];
+
+            markdata = markdata.map((item) => {
+              const ratioPoint = ratioData.find(
+                (r) => r.lat === item.lat && r.long === item.long
+              );
+              return {
+                ...item,
+                lng: item.long,
+                element: element,
+                ratio: ratioPoint ? ratioPoint.ratio : null,
+                ratio_element: secondElement,
+              };
+            });
+          } else {
+            markdata = markdata.map((item) => ({
+              ...item,
+              lng: item.long,
+              element: element,
+            }));
+          }
+
+          // Update the color scale domain based on the abundance values
+          const abundances = markdata.map((d) => d.abundance);
+          const minAbundance = Math.min(...abundances);
+          const maxAbundance = Math.max(...abundances);
+          colorScale.domain([minAbundance, maxAbundance]);
+
+          moon.htmlElementsData(markdata);
+
+          gData = markdata.map((data) => ({
+            lat: data.lat,
+            lng: data.long,
+            maxR: 2,
+            abundance: data.abundance,
+            ringWidth: 0.5,
+          }));
+          moon.ringsData(gData);
+        }
+
+        let naks = document.getElementById("naklabels");
+
+        for (const child of naks.children) {
+          child.style.cursor = "pointer";
+          child.addEventListener("click", showNaka);
+        }
+
+        document
+          .getElementById("secondElement")
+          .addEventListener("change", async () => {
+            const activeElement = document.querySelector(
+              '.nakEvent[style*="background-color: rgba(192, 192, 192, 0.6)"]'
+            );
+            if (activeElement) {
+              activeElement.parentElement.click();
+            }
+          });
+      }
+
+      getData();
+    </script>
+  </body>
+</html>
