@@ -3,7 +3,7 @@ import subprocess
 from flask import Flask, request, jsonify, render_template
 import sqlite3
 import pandas as pd
-FETCH_LIMIT = 10
+FETCH_LIMIT = 50
 # FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
