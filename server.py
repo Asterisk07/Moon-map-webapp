@@ -3,8 +3,8 @@ import subprocess
 from flask import Flask, request, jsonify, render_template
 import sqlite3
 import pandas as pd
-FETCH_LIMIT = 50
-# FETCH_LIMIT = None
+# FETCH_LIMIT = 1000
+FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
 DATABASE_PATH = 'database/abundances_new.db'
@@ -159,7 +159,9 @@ def get_ratio():
 
     if date:
         query = """
-            SELECT a1.lat, a1.long, a1.abundance/a2.abundance as ratio, a1.date
+            SELECT a1.lat, a1.long, a1.abundance/a2.abundance as ratio, 
+                   a1.abundance as abundance1, a2.abundance as abundance2,
+                   a1.date
             FROM abundances a1
             JOIN abundances a2 ON a1.lat = a2.lat AND a1.long = a2.long AND a1.date = a2.date
             WHERE a1.element = ? AND a2.element = ? AND a1.date = ?
@@ -169,7 +171,9 @@ def get_ratio():
         data = (element1, element2, date, lat_min, lat_max, long_min, long_max)
     else:
         query = """
-            SELECT a1.lat, a1.long, a1.abundance/a2.abundance as ratio, a1.date
+            SELECT a1.lat, a1.long, a1.abundance/a2.abundance as ratio,
+                   a1.abundance as abundance1, a2.abundance as abundance2,
+                   a1.date
             FROM abundances a1
             JOIN abundances a2 ON a1.lat = a2.lat AND a1.long = a2.long
             WHERE a1.element = ? AND a2.element = ?
