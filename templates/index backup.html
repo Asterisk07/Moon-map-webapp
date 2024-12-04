@@ -1,1029 +1,306 @@
+<!DOCTYPE html>
 <html>
-  <head>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
-      crossorigin="anonymous"
-    />
-    <script
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-      integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-      crossorigin="anonymous"
-    ></script>
+<head>
+  <title>Moon Chemical Abundance Map</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/globe.gl"></script>
+  
+  <style>
+    body { margin: 0; overflow: hidden; }
+    
+    .controls {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 15px;
+      border-radius: 0 0 10px 0;
+    }
 
-    <style>
-      body {
-        margin: 0;
-      }
+    .legend {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1;
+      background: rgba(0,0,0,0.8);
+      padding: 10px;
+      border-radius: 5px;
+      color: white;
+    }
 
-      /* <style> */
     #info-panel {
       position: absolute;
       top: 10px;
-      right: 200px;
+      right: 10px;
       padding: 10px;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0,0,0,0.8);
       color: white;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      border-radius: 8px;
+      border-radius: 5px;
+    }
+
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 20px;
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      border-radius: 10px;
+      display: none;
+    }
+
+    select, button {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3);
+      padding: 5px;
+      margin: 5px;
+      border-radius: 4px;
+    }
+
+    select:hover, button:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    #colorScale {
+      width: 200px;
+      height: 20px;
+      margin: 10px 0;
     }
   </style>
-    </style>
-
-    <script src="https://unpkg.com/d3-array"></script>
-    <script src="https://unpkg.com/d3-scale"></script>
-
-    <script src="https://unpkg.com/globe.gl"></script>
-    <!-- <script src="../../dist/globe.gl.js"></script> -->
-
-    <link rel="stylesheet" href="../static/style.css" />
-  </head>
-
-  <body>
-    <div
-      id="menu"
-      style="
-        position: absolute;
-        z-index: 30;
-        width: 400px;
-        height: 50px;
-        background-color: rgba(0, 0, 0, 0.7);
-      "
-    >
-      <div
-        style="
-          display: flex;
-          justify-content: space-around;
-          align-items: center;
-          height: 100%;
-          text-align: center;
-        "
-      >
-        <!-- <h2
-          id="con"
-          style="
-            box-sizing: border-box;
-            border-bottom: 2px solid white;
-            font-size: 24px;
-            color: white;
-            cursor: pointer;
-          "
-        >
-          Timeline
-        </h2> -->
-        <h2
-          id="nak"
-          style="
-            box-sizing: border-box;
-            font-size: 24px;
-            color: white;
-            cursor: pointer;
-          "
-        >
-          Plotting
-        </h2>
-      </div>
+</head>
+<body>
+  <div class="controls">
+    <h3>Moon Chemical Abundance</h3>
+    <div>
+      <select id="primaryElement">
+        <option value="">Select Primary Element</option>
+        <option value="Fe">Fe</option>
+        <option value="Ti">Ti</option>
+        <option value="Ca">Ca</option>
+        <option value="Si">Si</option>
+        <option value="Al">Al</option>
+        <option value="Mg">Mg</option>
+        <option value="Na">Na</option>
+      </select>
     </div>
-
-    <div
-      id="contdata"
-      style="
-        position: absolute;
-        z-index: 20;
-        top: 55px;
-        width: 400px;
-        background-color: rgba(0, 0, 0, 0.7);
-      "
-    >
-      <h1
-        style="
-          font-size: 30px;
-          font-weight: bold;
-          color: white;
-          text-align: center;
-          margin: 8px 0 8px 0;
-        "
-      >
-        Moonquake Map
-      </h1>
-      <div class="" style="text-align: center">
-        <h3 style="font-size: 20px; color: white; font-weight: bold">Year</h3>
-        <input
-          id="yearslider"
-          min="0"
-          max="0"
-          value="0"
-          type="range"
-          class="form-range"
-          style="width: 80%"
-        />
-        <div style="margin-top: 5px">
-          <label
-            id="yearlabel"
-            for="customRange1"
-            class="form-label"
-            style="
-              display: inline-block;
-              padding: 0 8px 0 8px;
-              text-align: center;
-              font-size: 25px;
-              border-radius: 5px;
-              padding: 0px 8px 0 8px;
-              background-color: rgba(255, 255, 255, 0.6);
-            "
-            >1969</label
-          >
-        </div>
-
-        <h3 style="font-size: 20px; color: white; font-weight: bold">Month</h3>
-        <input
-          id="monthslider"
-          min="0"
-          max="0"
-          value="0"
-          type="range"
-          class="form-range"
-          style="width: 80%"
-        />
-        <div style="margin-top: 5px">
-          <label
-            id="monthlabel"
-            for="customRange1"
-            class="form-label"
-            style="
-              display: inline-block;
-              padding: 0 8px 0 8px;
-              text-align: center;
-              font-size: 25px;
-              border-radius: 5px;
-              padding: 0px 8px 0 8px;
-              background-color: rgba(255, 255, 255, 0.6);
-            "
-            >Jan</label
-          >
-        </div>
-
-        <h3 style="font-size: 20px; color: white; font-weight: bold">Day</h3>
-        <input
-          id="dayslider"
-          min="1"
-          max="1"
-          value="1"
-          type="range"
-          class="form-range"
-          style="width: 80%"
-        />
-        <div style="margin-top: 5px">
-          <label
-            id="daylabel"
-            for="customRange1"
-            class="form-label"
-            style="
-              display: inline-block;
-              padding: 0 8px 0 8px;
-              text-align: center;
-              font-size: 25px;
-              border-radius: 5px;
-              padding: 0px 8px 0 8px;
-              background-color: rgba(255, 255, 255, 0.6);
-            "
-            >1</label
-          >
-        </div>
-
-        <button
-          id="getData"
-          style="
-            margin-top: 10px;
-            border: 1px solid white;
-            background-color: black;
-            color: white;
-            border-radius: 5px;
-            font-size: 20px;
-            text-align: center;
-            padding: 4px 8px 4px 8px;
-          "
-        >
-          Show Data
-        </button>
-      </div>
+    <div>
+      <select id="secondElement">
+        <option value="">None (Show Abundance Only)</option>
+        <option value="Fe">Fe</option>
+        <option value="Ti">Ti</option>
+        <option value="Ca">Ca</option>
+        <option value="Si">Si</option>
+        <option value="Al">Al</option>
+        <option value="Mg">Mg</option>
+        <option value="Na">Na</option>
+      </select>
     </div>
+    <button id="clearMap">Clear Map</button>
+  </div>
 
-    <div
-      id="nakamura"
-      style="
-        display: none;
-        position: absolute;
-        top: 55px;
-        z-index: 20;
-        width: 400px;
-        background-color: rgba(0, 0, 0, 0.7);
-        text-align: center;
-      "
-    >
-      <!-- <h1
-        style="
-          font-size: 30px;
-          font-weight: bold;
-          color: white;
-          text-align: center;
-          margin: 8px 0 8px 0;
-        "
-      >
-        Nakamura Seismic Events
-      </h1> -->
-      <div
-        id="naklabels"
-        style="
-          text-align: center;
-          margin-top: 10px;
-          height: 70vh;
-          overflow: scroll;
-        "
-      >
-        <!-- tk harcoded change this -->
-        <div nakNum="0" style="margin: 20px 0px">
-          <h3 class="nakEvent">Fe</h3>
-        </div>
-        <div nakNum="1" style="margin: 20px 0px">
-          <h3 class="nakEvent">Ti</h3>
-        </div>
-        <div nakNum="2" style="margin: 20px 0px">
-          <h3 class="nakEvent">Ca</h3>
-        </div>
-        <div nakNum="3" style="margin: 20px 0px">
-          <h3 class="nakEvent">Si</h3>
-        </div>
-        <div nakNum="4" style="margin: 20px 0px">
-          <h3 class="nakEvent">Al</h3>
-        </div>
-        <div nakNum="5" style="margin: 20px 0px">
-          <h3 class="nakEvent">Mg</h3>
-        </div>
-        <div nakNum="6" style="margin: 20px 0px">
-          <h3 class="nakEvent">Na</h3>
-        </div>
-
-        <!-- Add second element selector -->
-        <div
-          style="
-            margin: 20px 0px;
-            border-top: 1px solid white;
-            padding-top: 10px;
-          "
-        >
-          <h3 style="color: white">Select Second Element (Optional)</h3>
-          <select
-            id="secondElement"
-            style="
-              background: rgba(0, 0, 0, 0.7);
-              color: white;
-              border: 1px solid white;
-              padding: 5px;
-            "
-          >
-            <option value="">None</option>
-            <option value="Fe">Fe</option>
-            <option value="Ti">Ti</option>
-            <option value="Ca">Ca</option>
-            <option value="Si">Si</option>
-            <option value="Al">Al</option>
-            <option value="Mg">Mg</option>
-            <option value="Na">Na</option>
-          </select>
-        </div>
-      </div>
-      <button id="clearMap">Clear Map</button>
+  <div class="legend">
+    <div id="colorScale"></div>
+    <div style="display: flex; justify-content: space-between;">
+      <span>Low</span>
+      <span>High</span>
     </div>
+  </div>
 
-    <div
-      id="cont"
-      style="
-        display: none;
-        position: absolute;
-        right: 5px;
-        top: 5px;
-        z-index: 20;
-        background-color: rgba(200, 255, 255, 0.6);
-      "
-    >
-      <div
-        style="position: absolute; right: 5px; cursor: pointer"
-        onclick="document.getElementById('cont').style.display = 'none';"
-      >
-        <svg
-          width="24px"
-          height="24px"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M5.72 5.72a.75.75 0 011.06 0L12 10.94l5.22-5.22a.75.75 0 111.06 1.06L13.06 12l5.22 5.22a.75.75 0 11-1.06 1.06L12 13.06l-5.22 5.22a.75.75 0 01-1.06-1.06L10.94 12 5.72 6.78a.75.75 0 010-1.06z"
-          />
-        </svg>
-      </div>
-      <img id="plots" src="" alt="" style="width: 750px" />
-    </div>
+  <div id="info-panel"></div>
+  <div class="loading">Loading data...</div>
+  <div id="globeViz"></div>
 
-    <script>
-      let marker = `<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
-<path style="fill:#FF9900;" d="M507.494,426.066L282.864,53.536c-5.677-9.415-15.87-15.172-26.865-15.172
-	c-10.994,0-21.188,5.756-26.865,15.172L4.506,426.066c-5.842,9.689-6.015,21.774-0.451,31.625
-	c5.564,9.852,16.001,15.944,27.315,15.944h449.259c11.314,0,21.751-6.093,27.315-15.944
-	C513.509,447.839,513.336,435.755,507.494,426.066z"/>
-<path style="fill:#FFDC35;" d="M255.999,38.365c-10.994,0-21.188,5.756-26.865,15.172L4.506,426.066
-	c-5.842,9.689-6.015,21.774-0.451,31.625c5.564,9.852,16.001,15.944,27.315,15.944h224.629L255.999,38.365L255.999,38.365z"/>
-<path style="fill:#F20013;" d="M445.326,432.791H67.108c-3.591,0-6.911-1.909-8.718-5.012c-1.807-3.104-1.827-6.934-0.055-10.056
-	L247.23,85.028c1.792-3.155,5.139-5.106,8.767-5.107c0.001,0,0.003,0,0.004,0c3.626,0,6.974,1.946,8.767,5.099l189.324,332.694
-	c1.777,3.123,1.759,6.955-0.047,10.061S448.918,432.791,445.326,432.791z M84.436,412.616h343.543L256.013,110.423L84.436,412.616z"
-	/>
-<path style="fill:#FF4B00;" d="M256.332,412.616H84.436l171.576-302.192l-0.01-30.501h-0.005c-3.628,0.001-6.976,1.951-8.767,5.107
-	L58.336,417.722c-1.773,3.123-1.752,6.953,0.055,10.056c1.807,3.104,5.127,5.012,8.718,5.012h189.224v-20.175H256.332z"/>
-<path style="fill:#533F29;" d="M279.364,376.883c0,12.344-10.537,23.182-22.88,23.182c-13.246,0-23.182-10.838-23.182-23.182
-	c0-12.644,9.935-23.182,23.182-23.182C268.826,353.701,279.364,364.238,279.364,376.883z M273.644,319.681
-	c0,9.333-10.236,13.246-17.462,13.246c-9.634,0-17.762-3.914-17.762-13.246c0-35.826-4.214-87.308-4.214-123.134
-	c0-11.741,9.634-18.365,21.977-18.365c11.741,0,21.677,6.623,21.677,18.365C277.858,232.373,273.644,283.855,273.644,319.681z"/>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-</svg>`;
-
-      let landingSite = `<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 511.999 511.999" style="enable-background:new 0 0 511.999 511.999;" xml:space="preserve">
-<polygon style="fill:#C8F4DE;" points="500.881,351.23 11.119,351.23 38.328,296.812 473.671,296.812 "/>
-<polygon style="fill:#4A7DBA;" points="392.044,24.722 233.761,24.722 167.047,24.722 119.954,24.722 79.142,254.952 
-	79.142,296.812 432.858,296.812 432.858,254.952 "/>
-<circle style="fill:#87DFD6;" cx="257.117" cy="160.77" r="54.418"/>
-<path d="M190.141,28.981c0.278,0.667,0.623,1.312,1.023,1.912c0.4,0.612,0.867,1.179,1.379,1.69c0.511,0.511,1.079,0.978,1.69,1.379
-	c0.6,0.4,1.245,0.745,1.924,1.023c0.667,0.289,1.368,0.5,2.079,0.645s1.445,0.211,2.168,0.211s1.457-0.068,2.168-0.211
-	c0.712-0.145,1.412-0.356,2.09-0.645c0.667-0.278,1.312-0.623,1.912-1.023c0.612-0.4,1.179-0.867,1.69-1.379
-	c0.511-0.511,0.978-1.079,1.379-1.69c0.4-0.6,0.745-1.245,1.023-1.912c0.278-0.678,0.5-1.379,0.645-2.079
-	c0.145-0.723,0.211-1.458,0.211-2.179c0-0.723-0.067-1.458-0.211-2.168c-0.145-0.712-0.367-1.413-0.645-2.079
-	c-0.278-0.678-0.623-1.323-1.023-1.924c-0.4-0.612-0.867-1.179-1.379-1.69c-0.511-0.511-1.079-0.978-1.69-1.39
-	c-0.6-0.389-1.245-0.734-1.912-1.012c-0.678-0.278-1.379-0.5-2.09-0.634c-1.423-0.289-2.902-0.289-4.336,0
-	c-0.712,0.133-1.412,0.356-2.079,0.634c-0.678,0.278-1.323,0.624-1.924,1.012c-0.612,0.411-1.179,0.878-1.69,1.39
-	s-0.978,1.079-1.379,1.69c-0.4,0.6-0.745,1.245-1.023,1.924c-0.278,0.667-0.5,1.368-0.634,2.079
-	c-0.145,0.712-0.222,1.445-0.222,2.168c0,0.722,0.078,1.457,0.222,2.179C189.641,27.602,189.863,28.303,190.141,28.981z"/>
-<path d="M190.462,160.767c0,36.137,29.4,65.537,65.537,65.537s65.537-29.4,65.537-65.537s-29.4-65.536-65.537-65.536
-	S190.462,124.63,190.462,160.767z M255.999,117.468c23.875,0,43.299,19.424,43.299,43.298c0,23.876-19.424,43.299-43.299,43.299
-	S212.7,184.641,212.7,160.766C212.7,136.892,232.124,117.468,255.999,117.468z"/>
-<path d="M510.825,346.258l-27.209-54.418c-1.884-3.768-5.734-6.147-9.945-6.147h-29.695v-30.741c0-0.65-0.057-1.3-0.17-1.94
-	L402.993,22.782c-0.942-5.309-5.556-9.179-10.949-9.179H233.761c-6.141,0-11.119,4.979-11.119,11.119s4.978,11.119,11.119,11.119
-	h148.962l39.016,220.088v29.763H90.261v-29.765L129.276,35.84h37.771c6.141,0,11.119-4.979,11.119-11.119
-	s-4.978-11.119-11.119-11.119h-47.093c-5.393,0-10.007,3.868-10.949,9.179L68.193,253.012c-0.113,0.64-0.17,1.29-0.17,1.94v30.741
-	H38.328c-4.212,0-8.061,2.379-9.945,6.147L1.174,346.258c-1.723,3.447-1.539,7.54,0.487,10.818s5.605,5.274,9.458,5.274h89.198
-	L28.793,481.555c-3.16,5.265-1.452,12.095,3.814,15.255c1.791,1.074,3.763,1.587,5.711,1.587c3.777,0,7.46-1.926,9.545-5.401
-	l78.387-130.646h118.631v124.926c0,6.14,4.978,11.119,11.119,11.119c6.141,0,11.119-4.979,11.119-11.119V362.35h118.631
-	l78.387,130.646c2.085,3.476,5.767,5.401,9.545,5.401c1.947,0,3.919-0.513,5.711-1.587c5.266-3.16,6.973-9.989,3.814-15.255
-	L411.682,362.35h89.198c3.854,0,7.433-1.996,9.458-5.274C512.364,353.798,512.549,349.705,510.825,346.258z M29.109,340.112
-	l16.09-32.18h33.942h353.716H466.8l16.09,32.18H29.109z"/>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-<g>
-</g>
-</svg>`;
-      // tklabel;
-      function getMarkerColor(abundance) {
-        if (abundance < 33) return "#FF0000"; // Red
-        if (abundance > 66) return "#00FF00"; // Green
-        return "#0000FF"; // Blue
-      }
-
-      let labelMark = `<div onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 15px;">${marker}</div><div class="seismicdata" style="display: none;width:120px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Lat: {lat}<br>Long: {long}<br>Element : {element} <br> Abundance : {abundance}% <br> {ratio_text} Date : {string}</h4></div></div>`;
-
-      let years = [
-        "1969",
-        "1970",
-        "1971",
-        "1972",
-        "1973",
-        "1974",
-        "1975",
-        "1976",
-        "1977",
-      ];
-
-      let months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-
-      document
-        .getElementById("yearslider")
-        .addEventListener("input", (event) => {
-          document.getElementById("yearlabel").innerText =
-            years[event.target.value];
-
-          let curYear = parseInt(event.target.value) + 1969;
-
-          let currMonth = parseInt(
-            document.getElementById("monthslider").value
-          );
-
-          let date = new Date(curYear, currMonth + 1, 0);
-
-          let dayslider = document.getElementById("dayslider");
-
-          dayslider.setAttribute("max", date.getDate());
-          dayslider.value = 1;
-          document.getElementById("daylabel").innerText = 1;
-        });
-
-      document
-        .getElementById("monthslider")
-        .addEventListener("input", (event) => {
-          document.getElementById("monthlabel").innerText =
-            months[event.target.value];
-
-          let curYear =
-            parseInt(document.getElementById("yearslider").value) + 1969;
-
-          let currMonth = parseInt(
-            document.getElementById("monthslider").value
-          );
-
-          let date = new Date(curYear, currMonth + 1, 0);
-
-          let dayslider = document.getElementById("dayslider");
-
-          dayslider.setAttribute("max", date.getDate());
-          dayslider.value = 1;
-          document.getElementById("daylabel").innerText = 1;
-        });
-
-      document
-        .getElementById("dayslider")
-        .addEventListener("input", (event) => {
-          document.getElementById("daylabel").innerText = event.target.value;
-        });
-    </script>
-
-    <div id="globeViz"></div>
-
-    <div id="info-panel"></div>
-
-    <script>
-      // let element_list = ["Al", "Si", "Ti"];
-      let element_list = ["Fe", "Ti", "Ca", "Si", "Al", "Mg", "Na"];
-      const colorScale = d3.scaleOrdinal([
-        "orangered",
-        "mediumblue",
-        "darkgreen",
-        "yellow",
-      ]);
-
-      const labelsTopOrientation = new Set([
-        "Apollo 12",
-        "Luna 2",
-        "Luna 20",
-        "Luna 21",
-        "Luna 24",
-        "LCROSS Probe",
-      ]); // avoid label collisions
-
-      const elem = document.getElementById("globeViz");
-
-      let gData = [];
-
-      let markdata = [];
-
-      let apolloSeismic;
-
-      let plot_data;
-
-      let nakaData;
-
-      let selectedYear;
-      let selectedMonth;
-      let selectedDay;
-
-      let globDict;
-
-      let moonland_data;
-      async function fetchPllottingData(
-        type,
-        element1,
-        element2 = null,
-        date = null
-      ) {
-        let url = `http://127.0.0.1:3000/${type}?element=${element1}`;
-
-        if (element2) url += `&element2=${element2}`;
-        if (date) url += `&date=${date}`;
-
-        try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Error: ${response.status}`);
-
-          const data = await response.json();
-
-          // Ensuring the response is a JSON list
-          if (Array.isArray(data)) {
-            console.log("Data fetched:", data);
-            return data;
-          } else {
-            console.error("Unexpected data format. Expected an array.");
-            return []; // Return an empty list if data isn't an array
-          }
-        } catch (error) {
-          console.error("Fetch error:", error);
-          return []; // Return an empty list in case of an error
-        }
-      }
-
-      // Fix the getAbundance function
-      async function getAbundance(element, date = null) {
-        if (!element) return []; // Return empty array if no element provided
-
-        // Use port 3000 and add leading slash
-        let url = `http://127.0.0.1:3000/abundance?element=${encodeURIComponent(
-          element
-        )}`;
-
-        if (date) {
-          url += `&date=${encodeURIComponent(date)}`;
-        }
-
-        try {
-          const response = await fetch(url);
-          const data = await response.json();
-
-          if (response.ok) {
-            return data;
-          } else {
-            console.error("Server error:", data.error || "Unknown error");
-            return [];
-          }
-        } catch (error) {
-          console.error("Fetch error:", error);
-          return [];
-        }
-      }
-
-      async function getData() {
-        // let naka = await fetch("../static/cleanedData.json");
-
-        // nakaData = await naka.json();
-
-        // let apollo = await fetch("../static/Apollo_seismic_network.json");
-
-        // apolloSeismic = await apollo.json();
-
-        // let plots = await fetch("./plots/plot_dict.json");
-
-        // plot_data = await plots.json();
-
-        // let moonlandings = await fetch("../static/moon_lands.json");
-
-        // moonland_data = await moonlandings.json();
-        moonland_data = [];
-
-        // for (let index = 0; index < apolloSeismic.length; index++) {
-        //   markdata.push({
-        //     nak: false,
-        //     lat: apolloSeismic[index].lat,
-        //     lng: apolloSeismic[index].lng,
-        //     mission: apolloSeismic[index].mission,
-        //     name: apolloSeismic[index].name,
-        //     svalue: `s${apolloSeismic[index].mission.split(" ")[1]}`,
-        //   });
-        // }
-
-        start();
-      }
-
-      async function callPythonScript(arg1, arg2) {
-        const data = {
-          arg1: arg1,
-          arg2: arg2,
-        };
-
-        try {
-          const response = await fetch("http://127.0.0.1:5000/run-python", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(data),
-            // body: JSON.stringify(data),
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-
-          const nakData_val = await response.json();
-          return nakData_val; // Return the JSON object directly
-        } catch (error) {
-          console.error("Fetch error:", error);
-          return null; // Return null or handle the error as needed
-        }
-      }
-
-      function start() {
-        document.getElementById("contdata").style.display = "none";
-        document.getElementById("nakamura").style.display = "block";
-        const moon = Globe()
-          .globeImageUrl("../static/lunar_surface.jpg")
-          .bumpImageUrl("../static/lunar_bumpmap.jpg")
-          .backgroundImageUrl(
-            "https://unpkg.com/three-globe@2.24.7/example/img/night-sky.png"
-          )
-          .showGraticules(false)
-          .showAtmosphere(false)
-          // .ringsData(gData)
-          // .ringColor(() => "yellow")
-          .ringMaxRadius("maxR")
-          .ringPropagationSpeed("propagationSpeed")
-          .ringRepeatPeriod("repeatPeriod")
-          .htmlElementsData(markdata)
-          .htmlElement((d) => {
-            const el = document.createElement("div");
-
-            if (true) {
-              // Generate ratio text only if ratio data exists
-              const ratioText = d.ratio
-                ? `Ratio ${d.element}/${d.ratio_element}: ${d.ratio.toFixed(
-                    3
-                  )}<br>`
-                : "";
-              const markerColor = getMarkerColor(d.abundance);
-
-              el.innerHTML = labelMark
-                .replace("{string}", d.date)
-                .replace("{element}", d.element)
-                .replace("{lat}", d.lat)
-                .replace("{long}", d.lng)
-                .replace("{abundance}", d.abundance)
-                .replace("{ratio_text}", ratioText)
-                .replace("{color}", markerColor);
-            } else {
-              let apolloMarks = `<div class="someclasses" svalue="${d.svalue}" onmouseout="this.children[1].style.display = 'none';" onmouseover="this.children[1].style.display = 'block';"><div class="dangerIcon" style="width: 20px;">${landingSite}</div><div class="seismicdata" style="display: none;width:90px; position:absolute; top: 10px; left:6px; background-color: rgba(0, 0, 0, 0.6); border: 1px solid white;"><h4 style="font-size: 11px; color: white;">Mission: {miss}<br>Name: {na}<br>Lat: {lat}<br>Long: {long}</h4></div></div>`;
-
-              el.innerHTML = apolloMarks
-                .replace("{lat}", d.lat)
-                .replace("{long}", d.lng)
-                .replace("{miss}", d.mission)
-                .replace("{na}", d.name);
-            }
-
-            el.style["pointer-events"] = "auto";
-            el.style.cursor = "pointer";
-            el.onclick = (event) => {
-              let stationNum =
-                event.currentTarget.children[0].getAttribute("svalue");
-
-              // if (globDict.stations.includes(stationNum)) {
-              //   let filePath = `./plots/${stationNum}/${selectedYear}/${globDict.doy}/${stationNum}_${selectedYear}_${globDict.doy}_mh_plot.png`;
-
-              //   document.getElementById("plots").src = filePath;
-              //   document.getElementById("cont").style.display = "block";
-              // }
-            };
-            return el;
-          })
-          .labelText("label")
-          .labelSize(2.0)
-          .labelDotRadius(0.6)
-          .labelDotOrientation((d) =>
-            labelsTopOrientation.has(d.label) ? "top" : "bottom"
-          )
-          .labelColor((d) => "lightskyblue")
-          .labelsData(moonland_data)(document.getElementById("globeViz"));
-        
-          const camera = moon.camera();
-  const controls = moon.controls();
-  const infoPanel = document.getElementById('info-panel');
-
-  const UPDATE_INTERVAL = 1000;
-  let lastUpdateTime = 0;
-
-  // Function to update the info panel
-  function updateInfoPanel() {
-    // const zoomLevel = camera.position.length(); // Camera distance (proxy for zoom)
-    // const spatialResolution = 1 / zoomLevel;    // Example resolution calculation
-    const cursorPos = controls.target;          // Cursor position in world space (globe center point)
-
-
-    const fov = camera.fov * (Math.PI / 180); // Convert FOV to radians
-    const distance = camera.position.length();
-    const projected_dim = (2 * Math.tan(fov / 2) * distance);
-    const resolution = (2 * Math.tan(fov / 2) * distance) / window.innerWidth;
+  <script>
+    let currentData = [];
     
-
-    // Display relevant information
-    infoPanel.innerHTML = `
-      <strong>Globe Info:</strong><br>
-      Field of view: ${camera.fov.toFixed(2)} deg<br>
-      Distance from centre : ${distance.toFixed(2)} units<br>
-      Spatial Resolution: ${resolution.toFixed(5)} units/pixel<br>      
-      Projected diamter: ${projected_dim.toFixed(5)} units<br>      
-      Window size: ${window.innerWidth} pixels<br>      
-      Updated every ${UPDATE_INTERVAL} ms
-    `;
-    // Cursor Position: (X: ${cursorPos.x.toFixed(2)}, Y: ${cursorPos.y.toFixed(2)}, Z: ${cursorPos.z.toFixed(2)}) <br>
-  }
-
-  // Animation loop with controlled updates
-  function animate(time) {
-    requestAnimationFrame(animate);
-    controls.update(); // Update camera controls
-
-    if (time - lastUpdateTime > UPDATE_INTERVAL) {
-      updateInfoPanel();
-      lastUpdateTime = time;
-    }
-  }
-
-  animate(0); // Start animation loop
-        const colorInterpolator = (t) => `rgba(255,100,50,${Math.sqrt(1 - t)})`;
-
-        function clearTab(event) {
-          document.getElementById("contdata").style.display = "none";
-          document.getElementById("nakamura").style.display = "block";
-          // document.getElementById("con").style.borderBottom = "none";
-          document.getElementById("nak").style.borderBottom = "2px solid white";
-
-          let divs = document.querySelectorAll(".nakEvent");
-
-          for (const child of divs) {
-            child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+    // Fix Globe initialization
+    const globe = new Globe(document.getElementById('globeViz'))
+      .globeImageUrl("../static/lunar_surface.jpg")
+      .bumpImageUrl("../static/lunar_bumpmap.jpg")
+      .backgroundImageUrl("https://unpkg.com/three-globe@2.24.7/example/img/night-sky.png")
+      .showGraticules(false)
+      .showAtmosphere(false)
+      .pointRadius(0.5)
+      .pointColor(() => '#ff0000')
+      .pointAltitude(0) // Set to 0 to make markers flat on surface
+      .pointResolution(64) // Increase point resolution for smoother appearance
+      .pointLabel(d => `
+        <div style="
+          background-color: rgba(0, 0, 0, 0.8);
+          color: white;
+          padding: 8px;
+          border-radius: 5px;
+          font-family: Arial, sans-serif;
+          font-size: 12px;
+          min-width: 150px;
+        ">
+          <div><b>Location:</b></div>
+          <div>Lat: ${d.lat.toFixed(2)}°</div>
+          <div>Long: ${d.lng.toFixed(2)}°</div>
+          ${d.ratio ? 
+            `<div><b>Elements:</b> ${d.element1}/${d.element2}</div>
+             <div><b>Ratio:</b> ${d.ratio.toFixed(3)}</div>
+             <div><b>${d.element1}:</b> ${d.abundance1.toFixed(2)}%</div>
+             <div><b>${d.element2}:</b> ${d.abundance2.toFixed(2)}%</div>` : 
+            `<div><b>Element:</b> ${d.element}</div>
+             <div><b>Abundance:</b> ${d.abundance.toFixed(2)}%</div>`
           }
+          <div><b>Date:</b> ${d.date || 'N/A'}</div>
+        </div>
+      `)
+      .onPointHover(point => {
+        document.body.style.cursor = point ? 'pointer' : 'default';
+      });
 
-          markdata = [];
+    // Remove the additional globe(document...) call since we already passed the element
 
-          gData = [];
-
-          moon.ringsData([]);
-          moon.htmlElementsData([]);
-        }
-
-        // function getReqDate() {
-        //   selectedYear =
-        //     parseInt(document.getElementById("yearslider").value) + 1969;
-
-        //   selectedMonth =
-        //     parseInt(document.getElementById("monthslider").value) + 1;
-
-        //   selectedDay = parseInt(document.getElementById("dayslider").value);
-
-        //   globDict = plot_data[selectedYear][selectedMonth][selectedDay];
-
-        //   markdata = [];
-
-        //   for (let index = 0; index < apolloSeismic.length; index++) {
-        //     if (
-        //       globDict.stations.includes(
-        //         `s${apolloSeismic[index].mission.split(" ")[1]}`
-        //       )
-        //     ) {
-        //       markdata.push({
-        //         nak: false,
-        //         lat: apolloSeismic[index].lat,
-        //         lng: apolloSeismic[index].lng,
-        //         mission: apolloSeismic[index].mission,
-        //         name: apolloSeismic[index].name,
-        //         svalue: `s${apolloSeismic[index].mission.split(" ")[1]}`,
-        //       });
-        //     }
-        //   }
-
-        //   moon.htmlElementsData(markdata);
-        // }
-
-        // document
-        //   .getElementById("getData")
-        //   .addEventListener("click", getReqDate);
-
-        document.getElementById("nak").addEventListener("click", clearTab);
-
-        // document
-        //   .getElementById("clearMap")
-        //   .addEventListener("click", (event) => {
-        //     markdata = [];
-
-        //     gData = [];
-
-        //     moon.ringsData([]);
-        //     moon.htmlElementsData([]);
-
-        //     let divs = document.querySelectorAll(".nakEvent");
-
-        //     for (const child of divs) {
-        //       child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
-        //     }
-        //   });
-
-        // Function to clear map and reset data
-        function clearMapData() {
-          // Reset the markdata and gData arrays
-          markdata = [];
-          gData = [];
-
-          // Clear the ringsData and htmlElementsData
-          moon.ringsData([]);
-          moon.htmlElementsData([]);
-
-          // Reset the background color of elements with class '.nakEvent'
-          let divs = document.querySelectorAll(".nakEvent");
-          for (const child of divs) {
-            child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
-          }
-        }
-
-        // Add event listener to the "clearMap" button
-        document
-          .getElementById("clearMap")
-          .addEventListener("click", (event) => {
-            clearMapData(); // Call the function when the button is clicked
-          });
-
-        // document.getElementById("con").addEventListener("click", (event) => {
-        //   document.getElementById("nakamura").style.display = "none";
-        //   document.getElementById("contdata").style.display = "block";
-        //   document.getElementById("nak").style.borderBottom = "none";
-        //   document.getElementById("con").style.borderBottom = "2px solid white";
-
-        //   markdata = [];
-        //   gData = [];
-
-        //   // for (let index = 0; index < apolloSeismic.length; index++) {
-        //   //   markdata.push({
-        //   //     nak: false,
-        //   //     lat: apolloSeismic[index].lat,
-        //   //     lng: apolloSeismic[index].lng,
-        //   //     mission: apolloSeismic[index].mission,
-        //   //     name: apolloSeismic[index].name,
-        //   //     svalue: `s${apolloSeismic[index].mission.split(" ")[1]}`,
-        //   //   });
-        //   // }
-
-        //   moon.htmlElementsData(markdata);
-        //   // moon.ringsData(gData);
-        // });
-
-        // Update the showNaka function to handle errors better
-        async function showNaka(event) {
-          if (
-            !event.currentTarget ||
-            !event.currentTarget.hasAttribute("nakNum")
-          ) {
-            console.error("Invalid event target");
-            return;
-          }
-
-          let index = event.currentTarget.getAttribute("nakNum");
-          let element = element_list[index];
-
-          if (!element) {
-            console.error("No element selected");
-            return;
-          }
-
-          let secondElement = document.getElementById("secondElement").value;
-
-          clearMapData();
-
-          event.currentTarget.children[0].style.backgroundColor =
-            "rgba(192, 192, 192, 0.6)";
-
-          // Fetch abundance data
-          markdata = (await getAbundance(element)) || [];
-
-          if (markdata.length === 0) {
-            console.warn("No abundance data received");
-            return;
-          }
-
-          // If second element selected, fetch ratio data
-          if (secondElement) {
-            const ratioData =
-              (await fetchPllottingData("ratio", element, secondElement)) || [];
-
-            // Merge ratio data with abundance data
-            markdata = markdata.map((item) => {
-              const ratioPoint = ratioData.find(
-                (r) => r.lat === item.lat && r.long === item.long
-              );
-              return {
-                ...item,
-                lng: item.long,
-                element: element,
-                ratio: ratioPoint ? ratioPoint.ratio : null,
-                ratio_element: secondElement,
-              };
-            });
-          } else {
-            markdata = markdata.map((item) => ({
-              ...item,
-              lng: item.long,
-              element: element,
-            }));
-          }
-
-          // Update the display
-          moon.htmlElementsData(markdata);
-
-          // Update rings
-          gData = markdata.map((data) => ({
-            lat: data.lat,
-            lng: data.long,
-            maxR: 2, // Smaller fixed radius for circles
-            abundance: data.abundance, // Pass abundance for coloring
-            ringWidth: 0.5, // Thinner rings for better visibility
-          }));
-          moon.ringsData(gData);
-        }
-
-        let naks = document.getElementById("naklabels");
-
-        for (const child of naks.children) {
-          child.style.cursor = "pointer";
-          child.addEventListener("click", showNaka);
-        }
-
-        // Add event listener for second element changes
-        document
-          .getElementById("secondElement")
-          .addEventListener("change", async (event) => {
-            // Retrigger the currently selected element's data fetch
-            const activeElement = document.querySelector(
-              '.nakEvent[style*="background-color: rgba(192, 192, 192, 0.6)"]'
-            );
-            if (activeElement) {
-              activeElement.parentElement.click();
-            }
-          });
+    // Initialize color scale
+    const colorScale = d3.scaleSequential()
+      .interpolator(t => d3.interpolateRdYlBu(1 - t))  // Flip the color interpolator
+      .clamp(true);
+    
+    // Update the color legend
+    function updateColorScale(min, max) {
+      const canvas = document.getElementById('colorScale');
+      const ctx = canvas.getContext('2d');
+      const gradient = ctx.createLinearGradient(0, 0, 200, 0);
+      
+      // Generate gradient stops - keeping original color scale order for the legend
+      for (let i = 0; i <= 1; i += 0.1) {
+        const color = d3.interpolateRdYlBu(1 - i);  // Flip only the legend gradient
+        gradient.addColorStop(i, color);
       }
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 200, 20);
 
-      getData();
-    </script>
-  </body>
+      const lowLabel = document.getElementById('legendMin');
+      const highLabel = document.getElementById('legendHigh');
+      lowLabel.textContent = min.toFixed(2);
+      highLabel.textContent = max.toFixed(2);
+    }
+
+    // Replace the simple legend div with a more detailed one
+    document.querySelector('.legend').innerHTML = `
+      <div>
+        <canvas id="colorScale" width="200" height="20"></canvas>
+        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+          <span id="legendMin">0.00</span>
+          <span id="legendHigh">100.00</span>
+        </div>
+        <div id="legendLabel" style="text-align: center; margin-top: 5px;">
+          Abundance (%)
+        </div>
+      </div>
+    `;
+
+    // Update legend label based on visualization type
+    function updateLegendLabel(element1, element2) {
+      const legendLabel = document.getElementById('legendLabel');
+      if (element2) {
+        legendLabel.textContent = `${element1}/${element2} Ratio`;
+      } else {
+        legendLabel.textContent = `${element1} Abundance (%)`;
+      }
+    }
+
+    // Fetch and display data
+    async function fetchData(element1, element2 = null) {
+      document.querySelector('.loading').style.display = 'block';
+      
+      try {
+        const url = element2 ? 
+          `/ratio?element=${element1}&element2=${element2}` :
+          `/abundance?element=${element1}`;
+          
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!data.length) {
+          alert('No data available for selected elements');
+          return;
+        }
+
+        // Process data for visualization
+        const values = element2 ? 
+          data.map(d => d.ratio) :
+          data.map(d => d.abundance);
+          
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        
+        colorScale.domain([min, max]);
+        updateColorScale(min, max);
+        updateLegendLabel(element1, element2);
+
+        // Update globe visualization with correct abundance mapping
+        globe
+          .pointColor(d => colorScale(element2 ? d.ratio : d.abundance))
+          .pointsData(data.map(d => ({
+            lat: d.lat,
+            lng: d.long,
+            abundance: element2 ? null : d.abundance,
+            abundance1: element2 ? d.abundance1 : null,
+            abundance2: element2 ? d.abundance2 : null,
+            ratio: element2 ? d.ratio : null,
+            date: d.date,
+            element: element1,
+            element1: element1,
+            element2: element2
+          })));
+          
+        currentData = data;
+        
+        // Update info panel
+        const infoPanel = document.getElementById('info-panel');
+        infoPanel.innerHTML = `
+          <div>Points: ${data.length}</div>
+          <div>Range: ${min.toFixed(2)} - ${max.toFixed(2)}</div>
+        `;
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        alert('Error loading data');
+      } finally {
+        document.querySelector('.loading').style.display = 'none';
+      }
+    }
+
+    // Event Listeners
+    document.getElementById('primaryElement').addEventListener('change', (e) => {
+      const element1 = e.target.value;
+      const element2 = document.getElementById('secondElement').value;
+      if (element1) fetchData(element1, element2 || null);
+    });
+
+    document.getElementById('secondElement').addEventListener('change', (e) => {
+      const element1 = document.getElementById('primaryElement').value;
+      const element2 = e.target.value;
+      if (element1) fetchData(element1, element2 || null);
+    });
+
+    document.getElementById('clearMap').addEventListener('click', () => {
+      globe.pointsData([]);
+      currentData = [];
+      document.getElementById('primaryElement').value = '';
+      document.getElementById('secondElement').value = '';
+      document.getElementById('info-panel').innerHTML = '';
+    });
+
+    // Initialize color legend
+    const canvas = document.createElement('canvas');
+    canvas.id = 'colorScale';
+    canvas.width = 200;
+    canvas.height = 20;
+    document.querySelector('.legend').prepend(canvas);
+    updateColorScale(0, 100);
+  </script>
+</body>
 </html>

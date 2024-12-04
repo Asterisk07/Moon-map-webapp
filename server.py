@@ -3,7 +3,7 @@ import subprocess
 from flask import Flask, request, jsonify, render_template
 import sqlite3
 import pandas as pd
-# FETCH_LIMIT = 1000
+# FETCH_LIMIT = 140000
 FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
@@ -58,7 +58,8 @@ def fetch_points():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index with infobox.html')
+    # return render_template('index.html')
 
 
 @app.route('/run-python', methods=['POST'])
