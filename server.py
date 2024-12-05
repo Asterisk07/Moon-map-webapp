@@ -1,15 +1,25 @@
 import json
-import subprocess
 from flask import Flask, request, jsonify, render_template
 import sqlite3
-import pandas as pd
-# FETCH_LIMIT = 140000
-FETCH_LIMIT = None
+import pandas as pd 
+import numpy as np
+from sklearn.cluster import MiniBatchKMeans
+from functools import lru_cache
+import math
+from time import perf_counter_ns
+
+# Removed unused imports like subprocess
+
+FETCH_LIMIT = 100000
+# FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
-DATABASE_PATH = 'database/abundances_new.db'
-# DATABASE_PATH = 'database/abundances.db'
+# DATABASE_PATH = 'database/abundances_new.db'
+DATABASE_PATH = 'database/abundances.db'
 
+MAX_CLUSTERS = 5000
+MIN_CLUSTERS = 1000
+CACHE_SIZE = 32  # Number of recent results to cache
 
 def fetch_points_for_tile(x, y, zoom):
     bbox = tile_to_bbox(x, y, zoom)
@@ -67,124 +77,170 @@ def run_python_script():
     raise Exception("Not implemented")
 
 
-def query_db(query, params=(), limit=FETCH_LIMIT):
+def query_db(query, params=()):
+    print(f"\nExecuting query with params: {params}")
+    print(f"Query: {query}")
+
     db_path = DATABASE_PATH
-    connection = sqlite3.connect(db_path)
+    try:
+        with sqlite3.connect(db_path) as connection:
+            start_time = perf_counter_ns()
+            df = pd.read_sql_query(query, connection, params=params)
+            query_time = (perf_counter_ns() - start_time) / 1e6
 
-    # Add LIMIT clause if a limit is specified
-    if limit is not None:
-        query += f" LIMIT {limit}"
+        if df.empty:
+            print("Query returned no results")
+            return []
 
-    # Using pandas to read the query result directly into a DataFrame
-    df = pd.read_sql_query(query, connection, params=params)
+        print(f"Query returned {len(df)} rows in {query_time:.2f}ms")
+        print("Sample data:", df.iloc[0].to_dict() if len(df) > 0 else "No data")
+        return df.to_dict(orient='records')
+    except Exception as e:
+        print(f"Database error: {str(e)}")
+        return []
 
-    connection.close()
 
-    # Convert DataFrame to a list of dictionaries
-    result_list = df.to_dict(orient='records')
+@lru_cache(maxsize=CACHE_SIZE)
+def cached_cluster_data(data_key, n_clusters):
+    """Cached version of clustering to avoid recomputing for same parameters"""
+    return cluster_data(json.loads(data_key), n_clusters)
 
-    return result_list
+def estimate_clusters(data_length, zoom_level=None):
+    """Estimate optimal number of clusters based on data size and zoom"""
+    if zoom_level is None:
+        # Base number of clusters on data size
+        return min(MAX_CLUSTERS, max(MIN_CLUSTERS, math.ceil(data_length / 50)))
+    else:
+        # Adjust clusters based on zoom level
+        base_clusters = math.ceil(data_length / 50)
+        zoom_factor = math.pow(2, zoom_level - 2)  # Adjust clusters based on zoom
+        return min(MAX_CLUSTERS, max(MIN_CLUSTERS, math.ceil(base_clusters * zoom_factor)))
 
+def cluster_data(data, n_clusters=None):
+    print(f"\nStarting clustering of {len(data)} points")
+    
+    # Estimate clusters if not specified
+    n_clusters = n_clusters or estimate_clusters(len(data))
+    
+    if len(data) <= n_clusters:
+        print("No clustering needed, data points <= n_clusters")
+        return data
+        
+    start_time = perf_counter_ns()
+    coords = np.array([[d['lat'], d['long']] for d in data])
+    values = np.array([d.get('abundance', d.get('ratio', 0)) for d in data])
+    
+    print(f"Running KMeans clustering with {n_clusters} clusters")
+    kmeans = MiniBatchKMeans(
+        n_clusters=n_clusters,
+        batch_size=min(10000, len(data)),  # Larger batch size for faster processing
+        max_iter=100,                       # Limit iterations
+        init_size=min(10000, len(data)),   # Smaller init sample
+        random_state=42                     # For consistent results
+    )
+    
+    # Process in batches for large datasets
+    cluster_labels = kmeans.fit_predict(coords)
+    
+    clustered_data = []
+    for i in range(n_clusters):
+        mask = cluster_labels == i
+        if np.any(mask):
+            cluster_points = coords[mask]
+            cluster_values = values[mask]
+            center = cluster_points.mean(axis=0)
+            mean_value = cluster_values.mean()
+            
+            # Get sample point for element info
+            sample_point = next(p for p in data if p['lat'] == coords[mask][0][0] and p['long'] == coords[mask][0][1])
+            
+            cluster_point = {
+                'lat': float(center[0]),
+                'long': float(center[1]),
+                'abundance': float(mean_value),
+                'ratio': float(mean_value),
+                # Preserve element information
+                'element': sample_point.get('element'),
+                'element1': sample_point.get('element1'),
+                'element2': sample_point.get('element2'),
+                'abundance1': sample_point.get('abundance1'),
+                'abundance2': sample_point.get('abundance2')
+            }
+            clustered_data.append(cluster_point)
+    
+    cluster_time = (perf_counter_ns() - start_time) / 1e6  # Convert to milliseconds
+    print(f"Clustering completed in {cluster_time:.2f}ms")
+    print(f"Reduced {len(data)} points to {len(clustered_data)} clusters")
+    
+    return clustered_data
+
+def normalize_longitude(lng):
+    """Normalize longitude to [-180, 180] range"""
+    return ((lng + 180) % 360) - 180
 
 @app.route('/abundance', methods=['GET'])
 def get_abundance():
     element = request.args.get('element')
-    date = request.args.get('date')  # Optional parameter
-
-    # Parameters for bounding box (for zoom/pan)
-    # Default to -90 if not provided
-    lat_min = float(request.args.get('lat_min', -90))
-    # Default to 90 if not provided
-    lat_max = float(request.args.get('lat_max', 90))
-    # Default to -180 if not provided
-    long_min = float(request.args.get('long_min', -180))
-    # Default to 180 if not provided
-    long_max = float(request.args.get('long_max', 180))
-
+    
     if not element or element == 'undefined':
         return jsonify({"error": "Element parameter is required"}), 400
 
-    print(
-        f"Fetching for: element={element}, date={date}, lat_min={lat_min}, lat_max={lat_max}, long_min={long_min}, long_max={long_max}")
-
     try:
-        if date:
-            query = """
-                SELECT * FROM abundances
-                WHERE element = ? AND date = ? 
-                AND lat BETWEEN ? AND ? 
-                AND long BETWEEN ? AND ?
-            """
-            data = (element, date, lat_min, lat_max, long_min, long_max)
-        else:
-            query = """
-                SELECT * FROM abundances
-                WHERE element = ? 
-                AND lat BETWEEN ? AND ? 
-                AND long BETWEEN ? AND ?
-            """
-            data = (element, lat_min, lat_max, long_min, long_max)
-
-        result = query_db(query, data)
+        query = """
+            SELECT lat, long, abundance, element, date
+            FROM abundances
+            WHERE element = ?
+        """
+        result = query_db(query, (element,))
+        
         if not result:
-            return jsonify([])  # Return empty array if no results
-
+            print(f"No data found for element: {element}")
+            return jsonify([])
+            
+        print(f"Found {len(result)} points for {element}")
         return jsonify(result)
 
     except Exception as e:
-        print(f"Database error: {str(e)}")
-        return jsonify({"error": "Database error"}), 500
-
+        print(f"Error in get_abundance: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/ratio', methods=['GET'])
 def get_ratio():
     element1 = request.args.get('element')
     element2 = request.args.get('element2')
-    date = request.args.get('date')  # Optional parameter
-
-    # Parameters for bounding box (for zoom/pan)
-    # Default to -90 if not provided
-    lat_min = float(request.args.get('lat_min', -90))
-    # Default to 90 if not provided
-    lat_max = float(request.args.get('lat_max', 90))
-    # Default to -180 if not provided
-    long_min = float(request.args.get('long_min', -180))
-    # Default to 180 if not provided
-    long_max = float(request.args.get('long_max', 180))
 
     if not element1 or not element2:
         return jsonify({"error": "Both elements are required"}), 400
 
-    print(
-        f"Fetching ratio for: element1={element1}, element2={element2}, date={date}, lat_min={lat_min}, lat_max={lat_max}, long_min={long_min}, long_max={long_max}")
-
-    if date:
+    try:
         query = """
-            SELECT a1.lat, a1.long, a1.abundance/a2.abundance as ratio, 
-                   a1.abundance as abundance1, a2.abundance as abundance2,
-                   a1.date
+            SELECT 
+                a1.lat, 
+                a1.long, 
+                CAST(a1.abundance AS FLOAT) / CAST(a2.abundance AS FLOAT) as ratio,
+                a1.abundance as abundance1,
+                a2.abundance as abundance2,
+                a1.element as element1,
+                a2.element as element2
             FROM abundances a1
-            JOIN abundances a2 ON a1.lat = a2.lat AND a1.long = a2.long AND a1.date = a2.date
-            WHERE a1.element = ? AND a2.element = ? AND a1.date = ?
-            AND a1.lat BETWEEN ? AND ? 
-            AND a1.long BETWEEN ? AND ?
+            JOIN abundances a2 
+            ON a1.lat = a2.lat 
+            AND a1.long = a2.long
+            WHERE a1.element = ? 
+            AND a2.element = ?
         """
-        data = (element1, element2, date, lat_min, lat_max, long_min, long_max)
-    else:
-        query = """
-            SELECT a1.lat, a1.long, a1.abundance/a2.abundance as ratio,
-                   a1.abundance as abundance1, a2.abundance as abundance2,
-                   a1.date
-            FROM abundances a1
-            JOIN abundances a2 ON a1.lat = a2.lat AND a1.long = a2.long
-            WHERE a1.element = ? AND a2.element = ?
-            AND a1.lat BETWEEN ? AND ? 
-            AND a1.long BETWEEN ? AND ?
-        """
-        data = (element1, element2, lat_min, lat_max, long_min, long_max)
+        result = query_db(query, (element1, element2))
+        
+        if not result:
+            print(f"No data found for ratio {element1}/{element2}")
+            return jsonify([])
+            
+        print(f"Found {len(result)} ratio points")
+        return jsonify(result)
 
-    result = query_db(query, data)
-    return jsonify(result)
+    except Exception as e:
+        print(f"Error in get_ratio: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
