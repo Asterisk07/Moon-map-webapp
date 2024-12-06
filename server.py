@@ -235,6 +235,7 @@ def get_abundance():
         print(f"Error in get_abundance: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/ratio', methods=['GET'])
 def get_ratio():
     element1 = request.args.get('element')
@@ -302,6 +303,7 @@ def get_ratio():
     except Exception as e:
         print(f"Error in get_ratio: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/histogram', methods=['GET'])
 def get_histogram():
