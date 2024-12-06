@@ -6,6 +6,8 @@
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
       rel="stylesheet"
     />
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://unpkg.com/globe.gl"></script>
@@ -134,13 +136,16 @@
           <option value="Fe">Fe</option>
           <option value="Ti">Ti</option>
           <option value="Ca">Ca</option>
-          <option value="Si">Si</option>  
+          <option value="Si">Si</option>
           <option value="Al">Al</option>
           <option value="Mg">Mg</option>
           <option value="Na">Na</option>
         </select>
       </div>
       <button id="clearMap">Clear Map</button>
+      <button id="saveButton">Save Heatmap</button>
+      <button id="loadButton">Load Heatmap</button>
+      <br />
     </div>
 
     <div class="legend">
@@ -162,7 +167,7 @@
       let isProcessing = false;
 
       function updateStatus(message) {
-        document.getElementById('status').textContent = message;
+        document.getElementById("status").textContent = message;
       }
 
       let currentHoverTimeout;
@@ -170,7 +175,7 @@
       // Update globe initialization
       const globe = Globe({
         waitForGlobeReady: true,
-        animateIn: false
+        animateIn: false,
       })(document.getElementById("globeViz"))
         .globeImageUrl("../static/lunar_surface.jpg")
         .bumpImageUrl("../static/lunar_bumpmap.jpg")
@@ -180,12 +185,192 @@
         .showGraticules(true) // Enable graticules to help debug coordinate alignment
         .showAtmosphere(false)
         .heatmapsData([])
-        .heatmapPointLat('lat')
-        .heatmapPointLng('lng')
-        .heatmapPointWeight('value')
+        .heatmapPointLat("lat")
+        .heatmapPointLng("lng")
+        .heatmapPointWeight("value")
         .heatmapBandwidth(4) // Reduce bandwidth for better precision
         .heatmapColorSaturation(1.5);
-        console.log(globe.scene().children);
+
+      if (true) {
+        // new heatmap code
+        //   Moon Heatmap Optimization Functions
+
+        // Add these functions to your existing script
+
+        // Function to save heatmap data to a file
+        function saveHeatmapData(filename) {
+          if (!currentData || currentData.length === 0) {
+            console.error("No data to save");
+            return;
+          }
+
+          // Create a JSON object with metadata and data
+          const heatmapData = {
+            timestamp: new Date().toISOString(),
+            elementConfig: {
+              primaryElement: document.getElementById("primaryElement").value,
+              secondElement: document.getElementById("secondElement").value,
+            },
+            points: currentData,
+          };
+
+          // Convert to JSON string
+          const jsonData = JSON.stringify(heatmapData, null, 2);
+
+          // Create a Blob and trigger download
+          const blob = new Blob([jsonData], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename || `moon_heatmap_${Date.now()}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          console.log(`Heatmap data saved to ${a.download}`);
+        }
+
+        // Function to load heatmap data from a file
+        async function loadHeatmapData(file) {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = async (e) => {
+              try {
+                const heatmapData = JSON.parse(e.target.result);
+
+                // Restore element selections
+                document.getElementById("primaryElement").value =
+                  heatmapData.elementConfig.primaryElement;
+                document.getElementById("secondElement").value =
+                  heatmapData.elementConfig.secondElement;
+
+                // Process and set the data
+                currentData = heatmapData.points.map((point) => ({
+                  ...point,
+                  lat: parseFloat(point.lat),
+                  lng: parseFloat(point.lng),
+                  value: parseFloat(point.value),
+                }));
+
+                // Set heatmap data
+                globe
+                  .heatmapsData([currentData])
+                  .heatmapPointLat((d) => d.lat)
+                  .heatmapPointLng((d) => d.lng)
+                  .heatmapPointWeight((d) => d.value);
+
+                adjustHeatmapMaterial();
+
+                // Update color scale and legend
+                if (currentData.length > 0) {
+                  const values = currentData
+                    .map((p) => p.value)
+                    .filter((v) => v != null);
+                  const min = Math.min(...values);
+                  const max = Math.max(...values);
+                  // const min = 0;
+                  // const max = 100;
+
+                  updateColorScale(min, max);
+                  updateLegendLabel(
+                    heatmapData.elementConfig.primaryElement,
+                    heatmapData.elementConfig.secondElement
+                  );
+                }
+
+                updateStatus(
+                  `Loaded ${currentData.length} points from saved heatmap`
+                );
+                resolve(currentData);
+              } catch (error) {
+                console.error("Error loading heatmap data:", error);
+                reject(error);
+              }
+            };
+
+            reader.onerror = (error) => {
+              console.error("File reading error:", error);
+              reject(error);
+            };
+
+            reader.readAsText(file);
+          });
+        }
+
+        // Modify clearMap function to reset heatmap
+        document.getElementById("clearMap").addEventListener("click", () => {
+          updateStatus("Clearing...");
+
+          // Clear heatmap data
+          globe.heatmapsData([]);
+          currentData = [];
+
+          // Reset element selections
+          document.getElementById("primaryElement").value = "";
+          document.getElementById("secondElement").value = "";
+
+          // Reset color scale and legend
+          updateColorScale(0, 100);
+          document.getElementById("legendLabel").textContent = "Abundance (%)";
+
+          // Clear info panels
+          document.getElementById("info-panel").innerHTML = "";
+
+          updateStatus("");
+        });
+
+        // Add file input for loading heatmap
+        const loadHeatmapInput = document.createElement("input");
+        loadHeatmapInput.type = "file";
+        loadHeatmapInput.accept = ".json";
+        loadHeatmapInput.style.display = "none";
+        loadHeatmapInput.addEventListener("change", async (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            try {
+              await loadHeatmapData(file);
+            } catch (error) {
+              console.error("Failed to load heatmap:", error);
+              updateStatus("Failed to load heatmap");
+            }
+          }
+        });
+        document.body.appendChild(loadHeatmapInput);
+
+        // Add a button to trigger save and load
+        const saveButton = document.createElement("button");
+        saveButton.textContent = "Save Points";
+        saveButton.addEventListener("click", () => {
+          if (currentData.length > 0) {
+            const primaryElement =
+              document.getElementById("primaryElement").value;
+            const secondElement =
+              document.getElementById("secondElement").value;
+            const filename = `moon_heatmap_${primaryElement}${
+              secondElement ? `_${secondElement}` : ""
+            }_${Date.now()}.json`;
+            saveHeatmapData(filename);
+          } else {
+            updateStatus("No heatmap data to save");
+          }
+        });
+
+        const loadButton = document.createElement("button");
+        loadButton.textContent = "Load Points";
+        loadButton.addEventListener("click", () => {
+          loadHeatmapInput.click();
+        });
+
+        // Add buttons to the controls section
+        const controlsDiv = document.querySelector(".controls");
+        controlsDiv.appendChild(saveButton);
+        controlsDiv.appendChild(loadButton);
+      }
+
+      console.log(globe.scene().children);
 
       // Add event handlers after initialization
       globe.controls().autoRotate = false;
@@ -195,8 +380,8 @@
       // Update cartesianToLatLng function for more accurate conversion
       function cartesianToLatLng(x, y, z) {
         const radius = Math.sqrt(x * x + y * y + z * z);
-        const lat = Math.asin(y / radius) * 180 / Math.PI;
-        const lng = Math.atan2(z, x) * 180 / Math.PI;
+        const lat = (Math.asin(y / radius) * 180) / Math.PI;
+        const lng = (Math.atan2(z, x) * 180) / Math.PI;
         return { lat, lng: ((lng + 180) % 360) - 180 }; // Normalize longitude
       }
 
@@ -208,8 +393,13 @@
         globe.globeMaterial().renderOrder = 1;
 
         // Find heatmap meshes and adjust their materials
-        globe.scene().traverse(obj => {
-          if (obj.type === 'Mesh' && obj.material && obj.material.uniforms && obj.material.uniforms['heatMap']) {
+        globe.scene().traverse((obj) => {
+          if (
+            obj.type === "Mesh" &&
+            obj.material &&
+            obj.material.uniforms &&
+            obj.material.uniforms["heatMap"]
+          ) {
             obj.renderOrder = 0;
             obj.material.transparent = true;
             obj.material.opacity = 0.999; // Slightly less than 1
@@ -221,7 +411,11 @@
       function findGlobeMesh(scene) {
         let globeMesh = null;
         scene.traverse((object) => {
-          if (object.type === 'Mesh' && object.geometry && object.geometry.type === 'SphereGeometry') {
+          if (
+            object.type === "Mesh" &&
+            object.geometry &&
+            object.geometry.type === "SphereGeometry"
+          ) {
             // console.log('Found globe mesh:', object);
             globeMesh = object;
           }
@@ -229,8 +423,10 @@
         return globeMesh;
       }
 
-      // Set up the click handler using raycasting
-      globe.renderer().domElement.addEventListener('click', (event) => {
+      TIME_HOVER = 300;
+      const MAX_POINTS = 200; // Maximum allowed points in currentData
+      const DROP_POINTS = 50; // Number of points to drop when exceeding MAX_POINTS
+      const throttleHover = _.throttle(async (event) => {
         // Calculate mouse coordinates
         const mouse = new THREE.Vector2();
         const rect = globe.renderer().domElement.getBoundingClientRect();
@@ -243,9 +439,9 @@
 
         // Find the globe mesh
         const globeMesh = findGlobeMesh(globe.scene());
-        
+
         if (!globeMesh) {
-          console.error('Globe mesh not found');
+          console.error("Globe mesh not found");
           return;
         }
 
@@ -260,38 +456,244 @@
             intersectionPoint.z
           );
 
-          console.log('Globe clicked at:', { lat, lng });
+          console.log("Globe hovered at:", { lat, lng });
           showNearestPointInfo({ lat, lng });
+
+          // Call the backend to get nearby points
+          try {
+            let element1 = document.getElementById("primaryElement").value;
+            let element2 = document.getElementById("secondElement").value;
+            if (
+              element1 === undefined ||
+              element1 === null ||
+              element1 === ""
+            ) {
+              return; // Exit the function if element1 is undefined, null, or an empty string
+            }
+            const response = await fetch(
+              `/getnear?lat=${lat}&lng=${lng}&element=${element1}&radius=15.0`
+            );
+            const data = await response.json();
+
+            if (!data.length) {
+              console.log("No data available for selected elements");
+              return;
+            }
+
+            // Process data for visualization
+            const values = element2
+              ? data.map((d) => d.ratio)
+              : data.map((d) => d.abundance);
+
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            // const min = 0;
+            // const max = 100;
+
+            colorScale.domain([min, max]);
+            updateColorScale(min, max);
+            // updateLegendLabel(element1, element2);
+
+            // Update globe visualization with correct abundance mapping
+            globe
+              .pointColor((d) => colorScale(element2 ? d.ratio : d.abundance))
+              .pointsData(
+                data.map((d) => ({
+                  lat: d.lat,
+                  lng: d.long,
+                  abundance: element2 ? null : d.abundance,
+                  abundance1: element2 ? d.abundance1 : null,
+                  abundance2: element2 ? d.abundance2 : null,
+                  ratio: element2 ? d.ratio : null,
+                  date: d.date,
+                  element: element1,
+                  element1: element1,
+                  element2: element2,
+                }))
+              );
+
+            console.log(currentData[0].long);
+
+            currentData = data;
+
+            // Handle the nearby points here (e.g., display them on the globe)
+            console.log("Nearby points:", data.length);
+            // showNearestPointInfo({ lat, lng });
+          } catch (error) {
+            console.error("Error fetching nearby points:", error);
+          }
         } else {
-          console.log('No intersection with globe mesh');
+          console.log("No intersection with globe mesh");
         }
-      });
+      }, TIME_HOVER); // Execute every 100ms or adjust as necessary
+
+      // Set up the click handler using raycasting
+      globe.renderer().domElement.addEventListener("mousemove", throttleHover);
 
       // Remove previous globe.onGlobeClick handler if any
 
       // Haversine distance calculation
       function getDistance(lat1, lng1, lat2, lng2) {
-        const R = 6371; // Earth's radius in km
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = 
-          Math.sin(dLat/2) * Math.sin(dLat/2) +
-          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-          Math.sin(dLng/2) * Math.sin(dLng/2);
-        
+        const R = 1737.5; // moon's radius in km
+        const dLat = ((lat2 - lat1) * Math.PI) / 180;
+        const dLng = ((lng2 - lng1) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+
         return 2 * R * Math.asin(Math.sqrt(a));
       }
+
+      // Create a function to save the current heatmap as a cylindrical image
+      // const saveHeatmap = () => {
+      //   // Create a canvas to render the heatmap
+      //   const canvas = document.createElement("canvas");
+      //   const context = canvas.getContext("2d");
+
+      //   const width = globe.renderer().domElement.width;
+      //   const height = globe.renderer().domElement.height;
+      //   canvas.width = width;
+      //   canvas.height = height;
+
+      //   // Render the current scene (or heatmap) to the canvas
+      //   globe
+      //     .renderer()
+      //     .domElement.getContext("2d")
+      //     .drawImage(globe.renderer().domElement, 0, 0, width, height);
+
+      //   // Save the canvas image as a Data URL (PNG format)
+      //   const imageURL = canvas.toDataURL("image/png");
+
+      //   // Optionally, save this to local storage or download it as a file
+      //   localStorage.setItem("heatmapImage", imageURL);
+
+      //   // Create a downloadable link
+      //   const link = document.createElement("a");
+      //   link.href = imageURL;
+      //   link.download = "heatmap.png"; // File name for download
+      //   link.click();
+      //   console.log("Heatmap saved successfully");
+      // };
+
+      const saveHeatmap = () => {
+        // Check if globe.renderer() is valid
+        const renderer = globe.renderer();
+        if (!renderer || !renderer.domElement) {
+          console.error("Globe renderer is not initialized properly.");
+          return;
+        }
+
+        // Get the dimensions of the WebGL canvas
+        const width = renderer.domElement.width;
+        const height = renderer.domElement.height;
+
+        // Create a new WebGL render target to capture the scene
+        const renderTarget = new THREE.WebGLRenderTarget(width, height, {
+          minFilter: THREE.LinearFilter,
+          magFilter: THREE.LinearFilter,
+          format: THREE.RGBAFormat,
+          transfer: null,
+        });
+
+        // Create a textures array containing the single texture
+        renderTarget.textures = [renderTarget.texture];
+
+        console.log(renderTarget.texture);
+
+        // Ensure the render target is valid before using it
+        if (!renderTarget) {
+          console.error("Render target is not valid.");
+          return;
+        }
+
+        // Render the globe scene to the render target
+        renderer.setRenderTarget(renderTarget);
+        renderer.clear();
+        renderer.render(globe.scene(), globe.camera());
+        renderer.setRenderTarget(null); // Reset the render target to default (null)
+
+        // Create an array to store the pixel data
+        const pixels = new Uint8Array(4 * width * height); // RGBA data
+
+        // Read the pixels from the render target into the array
+        renderer.readRenderTargetPixels(
+          renderTarget,
+          0,
+          0,
+          width,
+          height,
+          pixels
+        );
+
+        // Create a canvas to display and save the image
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        canvas.width = width;
+        canvas.height = height;
+
+        // Create an ImageData object with the pixel data
+        const imageData = new ImageData(
+          new Uint8ClampedArray(pixels.buffer),
+          width,
+          height
+        );
+        context.putImageData(imageData, 0, 0);
+
+        // Convert the canvas to a Data URL (PNG format)
+        const imageURL = canvas.toDataURL("image/png");
+
+        // Optionally, save this to localStorage or download it as a file
+        localStorage.setItem("heatmapImage", imageURL);
+
+        // Create a downloadable link
+        const link = document.createElement("a");
+        link.href = imageURL;
+        link.download = "heatmap.png"; // File name for download
+        link.click();
+        console.log("Heatmap saved successfully");
+      };
+
+      // Create a function to load the previously saved heatmap image
+      const loadHeatmap = () => {
+        // Retrieve the saved heatmap image from localStorage
+        const imageURL = localStorage.getItem("heatmapImage");
+
+        if (!imageURL) {
+          console.log("No saved heatmap found");
+          return;
+        }
+
+        // Create a texture from the saved image
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load(imageURL, (texture) => {
+          // Apply the texture to the globe
+          globe.material.map = texture;
+          globe.material.needsUpdate = true;
+          console.log("Heatmap loaded successfully");
+        });
+      };
+
+      // Add event listeners to the buttons
+      document
+        .getElementById("saveButton")
+        .addEventListener("click", saveHeatmap);
+      document
+        .getElementById("loadButton")
+        .addEventListener("click", loadHeatmap);
 
       // Update findNearestPoint function to handle coordinate normalization
       function findNearestPoint(lat, lng, data) {
         let nearest = null;
         let minDist = Infinity;
         const MAX_DISTANCE = 200; // Reduced from 1000 to 200 km for more precise matching
-        
+
         // Normalize input longitude
         lng = ((lng + 180) % 360) - 180;
-        
-        data.forEach(point => {
+
+        data.forEach((point) => {
           // Use both 'lng' and 'long' properties since data might have either
           const pointLng = ((point.long || point.lng + 180) % 360) - 180;
           const dist = getDistance(lat, lng, point.lat, pointLng);
@@ -300,65 +702,80 @@
             nearest = point;
           }
         });
-        
+
         // Add debug output
-        console.log('Finding nearest point to:', { lat, lng });
-        console.log('Found point:', nearest);
-        console.log('Distance:', minDist.toFixed(2), 'km');
-        
+        console.log("Finding nearest point to:", { lat, lng });
+        console.log("Found point:", nearest);
+        console.log("Distance:", minDist.toFixed(2), "km");
+
         return nearest;
       }
 
       // Modify the showNearestPointInfo function to better handle ratios
       function showNearestPointInfo(point) {
         if (!point) return;
-        
+
         let infoHtml = `
-          <div style="
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 8px;
-            border-radius: 5px;
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-            min-width: 150px;
-          ">
-            <div><b>Clicked Location:</b></div>
-            <div>Lat: ${point.lat.toFixed(4)}°</div>
-            <div>Lng: ${point.lng.toFixed(4)}°</div>`;
+                <div style="
+                  background-color: rgba(0, 0, 0, 0.8);
+                  color: white;
+                  padding: 8px;
+                  border-radius: 5px;
+                  font-family: Arial, sans-serif;
+                  font-size: 12px;
+                  min-width: 150px;
+                ">
+                  <div><b>Hovered Location:</b></div>
+                  <div>Lat: ${point.lat.toFixed(4)}°</div>
+                  <div>Lng: ${point.lng.toFixed(4)}°</div>`;
 
         if (currentData.length) {
           const nearest = findNearestPoint(point.lat, point.lng, currentData);
           if (nearest) {
-            const distance = getDistance(point.lat, point.lng, nearest.lat, nearest.long || nearest.lng);
+            const distance = getDistance(
+              point.lat,
+              point.lng,
+              nearest.lat,
+              nearest.long || nearest.lng
+            );
             infoHtml += `
-              <div style="margin-top: 10px;"><b>Nearest Data Point:</b></div>
-              <div>Lat: ${nearest.lat.toFixed(4)}°</div>
-              <div>Lng: ${(nearest.long || nearest.lng).toFixed(4)}°</div>
-              <div>Distance: ${distance.toFixed(2)} km</div>`;
+                    <div style="margin-top: 10px;"><b>Nearest Data Point:</b></div>
+                    <div>Lat: ${nearest.lat.toFixed(4)}°</div>
+                    <div>Lng: ${(nearest.long || nearest.lng).toFixed(4)}°</div>
+                    <div>Distance: ${distance.toFixed(2)} km</div>`;
 
             // Check if we have ratio data (element1/element2 present)
             if (nearest.element1 && nearest.element2) {
               infoHtml += `
-                <div><b>Elements:</b> ${nearest.element1}/${nearest.element2}</div>
-                <div><b>Ratio:</b> ${nearest.ratio.toFixed(3)}</div>
-                <div><b>${nearest.element1}:</b> ${nearest.abundance1.toFixed(2)}%</div>
-                <div><b>${nearest.element2}:</b> ${nearest.abundance2.toFixed(2)}%</div>`;
-            } 
+                      <div><b>Elements:</b> ${nearest.element1}/${
+                nearest.element2
+              }</div>
+                      <div><b>Ratio:</b> ${nearest.ratio.toFixed(3)}</div>
+                      <div><b>${
+                        nearest.element1
+                      }:</b> ${nearest.abundance1.toFixed(2)}%</div>
+                      <div><b>${
+                        nearest.element2
+                      }:</b> ${nearest.abundance2.toFixed(2)}%</div>`;
+            }
             // Check if we have single element abundance data
             else if (nearest.element) {
               infoHtml += `
-                <div><b>Element:</b> ${nearest.element}</div>
-                <div><b>Abundance:</b> ${nearest.abundance.toFixed(2)}%</div>`;
+                      <div><b>Element:</b> ${nearest.element}</div>
+                      <div><b>Abundance:</b> ${nearest.abundance.toFixed(
+                        2
+                      )}%</div>`;
             }
             // If we have just ratio data without element names
             else if (nearest.ratio !== undefined) {
-              const primaryElement = document.getElementById('primaryElement').value;
-              const secondElement = document.getElementById('secondElement').value;
+              const primaryElement =
+                document.getElementById("primaryElement").value;
+              const secondElement =
+                document.getElementById("secondElement").value;
               if (primaryElement && secondElement) {
                 infoHtml += `
-                  <div><b>Elements:</b> ${primaryElement}/${secondElement}</div>
-                  <div><b>Ratio:</b> ${nearest.ratio.toFixed(3)}</div>`;
+                        <div><b>Elements:</b> ${primaryElement}/${secondElement}</div>
+                        <div><b>Ratio:</b> ${nearest.ratio.toFixed(3)}</div>`;
               }
             }
 
@@ -370,34 +787,46 @@
           }
         }
 
-        infoHtml += '</div>';
-        document.getElementById('info-panel').innerHTML = infoHtml;
+        infoHtml += "</div>";
+        document.getElementById("info-panel").innerHTML = infoHtml;
       }
 
       // Update the data transformation in fetchData function
       async function fetchData(element1, element2 = null) {
         if (isProcessing) return;
         isProcessing = true;
-        updateStatus('Fetching data...');
+        updateStatus("Fetching data...");
         document.querySelector(".loading").style.display = "block";
-    
+
         try {
+          console.time("fetchData Total Time"); // Start total timer
+
+          // Prepare URL
+          console.time("Construct URL");
           const url = element2
             ? `/ratio?element=${element1}&element2=${element2}`
             : `/abundance?element=${element1}`;
-    
+          console.timeEnd("Construct URL");
+
+          // Fetch data
+          console.time("Fetch Data");
           const response = await fetch(url);
           const data = await response.json();
-    
+          console.timeEnd("Fetch Data");
+
           if (!data || !Array.isArray(data) || !data.length) {
-            updateStatus('No data available');
+            updateStatus("No data available");
             globe.heatmapsData([]); // Clear existing heatmap
             currentData = [];
+            console.timeEnd("fetchData Total Time"); // End total timer
             return;
           }
-    
-          updateStatus('Processing data...');
-          currentData = data.map(d => ({
+
+          updateStatus("Processing data...");
+          console.time("Process Data");
+
+          // Transform data
+          currentData = data.map((d) => ({
             lat: parseFloat(d.lat),
             lng: parseFloat(d.long || d.lng || 0), // Handle both long and lng
             value: parseFloat(element2 ? d.ratio : d.abundance),
@@ -408,44 +837,57 @@
             abundance1: parseFloat(d.abundance1),
             abundance2: parseFloat(d.abundance2),
             ratio: parseFloat(d.ratio),
-            date: d.date
+            date: d.date,
           }));
-    
-          // Filter out any invalid data points
-          currentData = currentData.filter(d => 
-            !isNaN(d.lat) && 
-            !isNaN(d.lng) && 
-            !isNaN(d.value) && 
-            d.value !== null && 
-            d.value !== undefined
+
+          // Filter invalid data points
+          currentData = currentData.filter(
+            (d) =>
+              !isNaN(d.lat) &&
+              !isNaN(d.lng) &&
+              !isNaN(d.value) &&
+              d.value !== null &&
+              d.value !== undefined
           );
-    
-          console.log('Processed data:', currentData[0]); // Debug first data point
-    
+
+          console.timeEnd("Process Data");
+
+          console.log("Processed data:", currentData[0]); // Debug first data point
+
           // Set heatmap data
+          console.time("Set Heatmap Data");
           globe
             .heatmapsData([currentData])
-            .heatmapPointLat(d => d.lat)
-            .heatmapPointLng(d => d.lng)
-            .heatmapPointWeight(d => d.value);
-    
+            .heatmapPointLat((d) => d.lat)
+            .heatmapPointLng((d) => d.lng)
+            .heatmapPointWeight((d) => d.value);
           adjustHeatmapMaterial();
-    
+          console.timeEnd("Set Heatmap Data");
+
           // Find min and max values for color scaling
           if (currentData.length > 0) {
-            const values = currentData.map(p => p.value).filter(v => v != null);
-            const min = Math.min(...values);
-            const max = Math.max(...values);
+            const values = currentData
+              .map((p) => p.value)
+              .filter((v) => v != null);
+            let min = values.reduce(
+              (acc, val) => (val < acc ? val : acc),
+              Infinity
+            );
+            let max = values.reduce(
+              (acc, val) => (val > acc ? val : acc),
+              -Infinity
+            );
+            // min = 0;
+            // max = 100;
             updateColorScale(min || 0, max || 100);
             updateLegendLabel(element1, element2);
           }
-    
+
           updateStatus(`Done - ${currentData.length} points loaded`);
           console.log(`Loaded ${currentData.length} points`);
-    
         } catch (error) {
           console.error("Error:", error);
-          updateStatus('Error loading data');
+          updateStatus("Error loading data");
         } finally {
           isProcessing = false;
           document.querySelector(".loading").style.display = "none";
@@ -464,10 +906,10 @@
           min = 0;
           max = 100;
         }
-        
+
         const canvas = document.getElementById("colorScale");
         if (!canvas) return;
-        
+
         const ctx = canvas.getContext("2d");
         const gradient = ctx.createLinearGradient(0, 0, 200, 0);
 
@@ -491,17 +933,17 @@
 
       // Replace the simple legend div with a more detailed one
       document.querySelector(".legend").innerHTML = `
-      <div>
-        <canvas id="colorScale" width="200" height="20"></canvas>
-        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
-          <span id="legendMin">0.00</span>
-          <span id="legendHigh">100.00</span>
-        </div>
-        <div id="legendLabel" style="text-align: center; margin-top: 5px;">
-          Abundance (%)
-        </div>
-      </div>
-    `;
+            <div>
+              <canvas id="colorScale" width="200" height="20"></canvas>
+              <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                <span id="legendMin">0.00</span>
+                <span id="legendHigh">100.00</span>
+              </div>
+              <div id="legendLabel" style="text-align: center; margin-top: 5px;">
+                Abundance (%)
+              </div>
+            </div>
+          `;
 
       // Update legend label based on visualization type
       function updateLegendLabel(element1, element2) {
@@ -531,12 +973,12 @@
         });
 
       document.getElementById("clearMap").addEventListener("click", () => {
-        updateStatus('Clearing...');
+        updateStatus("Clearing...");
         globe.pointsData([]);
         currentData = [];
         document.getElementById("primaryElement").value = "";
         document.getElementById("secondElement").value = "";
-        updateStatus('');
+        updateStatus("");
       });
 
       // Initialize color legend
@@ -565,16 +1007,16 @@
             (2 * Math.tan(fov / 2) * distance) / window.innerWidth;
 
           // Display relevant information
-          document.getElementById('globe-info').innerHTML = `
-      <strong>Globe Info:</strong><br>
-      Field of view: ${camera.fov.toFixed(2)} deg<br>
-      Distance from centre : ${distance.toFixed(2)} units<br>
-      Spatial Resolution: ${resolution.toFixed(5)} units/pixel<br>      
-      Projected diamter: ${projected_dim.toFixed(5)} units<br>      
-      Window size: ${window.innerWidth} pixels<br> 
-      Number of points plotted: ${currentData.length}<br>     
-      Updated every ${UPDATE_INTERVAL} ms
-    `;
+          document.getElementById("globe-info").innerHTML = `
+            <strong>Globe Info:</strong><br>
+            Field of view: ${camera.fov.toFixed(2)} deg<br>
+            Distance from centre : ${distance.toFixed(2)} units<br>
+            Spatial Resolution: ${resolution.toFixed(5)} units/pixel<br>
+            Projected diamter: ${projected_dim.toFixed(5)} units<br>
+            Window size: ${window.innerWidth} pixels<br>
+            Number of points plotted: ${currentData.length}<br>
+            Updated every ${UPDATE_INTERVAL} ms
+          `;
         }
 
         // Animation loop with controlled updates
@@ -593,7 +1035,7 @@
         }
 
         // Clean up animation when window loses focus
-        window.addEventListener('blur', () => {
+        window.addEventListener("blur", () => {
           if (window.animationFrameId) {
             cancelAnimationFrame(window.animationFrameId);
             window.animationFrameId = null;
@@ -601,7 +1043,7 @@
         });
 
         // Restore animation when window gains focus
-        window.addEventListener('focus', () => {
+        window.addEventListener("focus", () => {
           if (!window.animationFrameId) {
             animate(0);
           }
@@ -613,13 +1055,13 @@
       // Add this throttle function at the top of your script
       function throttle(func, limit) {
         let inThrottle;
-        return function(...args) {
+        return function (...args) {
           if (!inThrottle) {
             func.apply(this, args);
             inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
+            setTimeout(() => (inThrottle = false), limit);
           }
-        }
+        };
       }
     </script>
   </body>

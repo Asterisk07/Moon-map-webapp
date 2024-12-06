@@ -1,433 +1,676 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Moon Chemical Abundance Map</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/globe.gl"></script>
+    <script src="https://unpkg.com/three@0.124.0/build/three.min.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+
+      .controls {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px;
+        border-radius: 0 0 10px 0;
+      }
+
+      .legend {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        z-index: 1;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+        color: white;
+      }
+
+      #info-panel {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        border-radius: 8px;
+        min-width: 150px;
+      }
+
+      #globe-info {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        border-radius: 8px;
+        min-width: 150px;
+      }
+
+      .loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 20px;
+        border-radius: 10px;
+        display: none;
+      }
+
+      select,
+      button {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 5px;
+        margin: 5px;
+        border-radius: 4px;
+      }
+
+      select:hover,
+      button:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      #colorScale {
+        width: 200px;
+        height: 20px;
+        margin: 10px 0;
+      }
+
+      .status {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        z-index: 1000;
+        font-family: Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <h3>Moon Chemical Abundance</h3>
+      <div>
+        <select id="primaryElement">
+          <option value="">Select Primary Element</option>
+          <option value="Fe">Fe</option>
+          <option value="Ti">Ti</option>
+          <option value="Ca">Ca</option>
+          <option value="Si">Si</option>
+          <option value="Al">Al</option>
+          <option value="Mg">Mg</option>
+          <option value="Na">Na</option>
+        </select>
+      </div>
+      <div>
+        <select id="secondElement">
+          <option value="">None (Show Abundance Only)</option>
+          <option value="Fe">Fe</option>
+          <option value="Ti">Ti</option>
+          <option value="Ca">Ca</option>
+          <option value="Si">Si</option>
+          <option value="Al">Al</option>
+          <option value="Mg">Mg</option>
+          <option value="Na">Na</option>
+        </select>
+      </div>
+      <button id="clearMap">Clear Map</button>
+    </div>
+
+    <div class="legend">
+      <div id="colorScale"></div>
+      <div style="display: flex; justify-content: space-between">
+        <span>Low</span>
+        <span>High</span>
+      </div>
+    </div>
+
+    <div class="loading">Loading data...</div>
+    <div id="globeViz"></div>
+    <div id="info-panel"></div>
+    <div id="globe-info"></div>
+    <div class="status" id="status"></div>
 
     <script>
-      // let element_list = ["Al", "Si", "Ti"];
-      let element_list = ["Fe", "Ti", "Ca", "Si", "Al", "Mg", "Na"];
-      // Define the color scale for the heatmap
-      let colorScale = d3
-        .scaleSequential(d3.interpolateRdYlBu)
-        .domain([0, 100]);
+      let currentData = [];
+      let isProcessing = false;
 
-      const labelsTopOrientation = new Set([
-        "Apollo 12",
-        "Luna 2",
-        "Luna 20",
-        "Luna 21",
-        "Luna 24",
-        "LCROSS Probe",
-      ]); // avoid label collisions
+      function updateStatus(message) {
+        document.getElementById("status").textContent = message;
+      }
 
-      const elem = document.getElementById("globeViz");
+      let currentHoverTimeout;
 
-      let gData = [];
+      // Update globe initialization
+      const globe = Globe({
+        waitForGlobeReady: true,
+        animateIn: false,
+      })(document.getElementById("globeViz"))
+        .globeImageUrl("../static/lunar_surface.jpg")
+        .bumpImageUrl("../static/lunar_bumpmap.jpg")
+        .backgroundImageUrl(
+          "https://unpkg.com/three-globe@2.24.7/example/img/night-sky.png"
+        )
+        .showGraticules(true) // Enable graticules to help debug coordinate alignment
+        .showAtmosphere(false)
+        .heatmapsData([])
+        .heatmapPointLat("lat")
+        .heatmapPointLng("lng")
+        .heatmapPointWeight("value")
+        .heatmapBandwidth(4) // Reduce bandwidth for better precision
+        .heatmapColorSaturation(1.5);
 
-      let markdata = [];
+      console.log(globe.scene().children);
 
-      let apolloSeismic;
+      // Add event handlers after initialization
+      globe.controls().autoRotate = false;
+      globe.controls().autoRotateSpeed = 0.1;
+      globe.controls().enableZoom = true;
 
-      let plot_data;
+      // Update cartesianToLatLng function for more accurate conversion
+      function cartesianToLatLng(x, y, z) {
+        const radius = Math.sqrt(x * x + y * y + z * z);
+        const lat = (Math.asin(y / radius) * 180) / Math.PI;
+        const lng = (Math.atan2(z, x) * 180) / Math.PI;
+        return { lat, lng: ((lng + 180) % 360) - 180 }; // Normalize longitude
+      }
 
-      let nakaData;
+      globe.pointOfView({ lat: 0, lng: 0, altitude: 2.5 });
 
-      let selectedYear;
-      let selectedMonth;
-      let selectedDay;
+      // Function to adjust heatmap material properties
+      function adjustHeatmapMaterial() {
+        // Adjust the globe's render order
+        globe.globeMaterial().renderOrder = 1;
 
-      let globDict;
+        // Find heatmap meshes and adjust their materials
+        globe.scene().traverse((obj) => {
+          if (
+            obj.type === "Mesh" &&
+            obj.material &&
+            obj.material.uniforms &&
+            obj.material.uniforms["heatMap"]
+          ) {
+            obj.renderOrder = 0;
+            obj.material.transparent = true;
+            obj.material.opacity = 0.999; // Slightly less than 1
+          }
+        });
+      }
 
-      let moonland_data;
-      async function fetchPllottingData(
-        type,
-        element1,
-        element2 = null,
-        date = null
-      ) {
-        let url = `http://127.0.0.1:3000/${type}?element=${element1}`;
+      // Debug function to find the globe mesh
+      function findGlobeMesh(scene) {
+        let globeMesh = null;
+        scene.traverse((object) => {
+          if (
+            object.type === "Mesh" &&
+            object.geometry &&
+            object.geometry.type === "SphereGeometry"
+          ) {
+            // console.log('Found globe mesh:', object);
+            globeMesh = object;
+          }
+        });
+        return globeMesh;
+      }
 
-        if (element2) url += `&element2=${element2}`;
-        if (date) url += `&date=${date}`;
+      // Set up the click handler using raycasting
+      globe.renderer().domElement.addEventListener("click", (event) => {
+        // Calculate mouse coordinates
+        const mouse = new THREE.Vector2();
+        const rect = globe.renderer().domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-        try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Error: ${response.status}`);
+        // Raycasting
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, globe.camera());
 
-          const data = await response.json();
+        // Find the globe mesh
+        const globeMesh = findGlobeMesh(globe.scene());
 
-          // Ensuring the response is a JSON list
-          if (Array.isArray(data)) {
-            console.log("Data fetched:", data);
-            return data;
+        if (!globeMesh) {
+          console.error("Globe mesh not found");
+          return;
+        }
+
+        // Intersect with the globe mesh
+        const intersects = raycaster.intersectObject(globeMesh, true);
+
+        if (intersects.length > 0) {
+          const intersectionPoint = intersects[0].point;
+          const { lat, lng } = cartesianToLatLng(
+            intersectionPoint.x,
+            intersectionPoint.y,
+            intersectionPoint.z
+          );
+
+          console.log("Globe clicked at:", { lat, lng });
+          showNearestPointInfo({ lat, lng });
+        } else {
+          console.log("No intersection with globe mesh");
+        }
+      });
+
+      // Remove previous globe.onGlobeClick handler if any
+
+      // Haversine distance calculation
+      function getDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371; // Earth's radius in km
+        const dLat = ((lat2 - lat1) * Math.PI) / 180;
+        const dLng = ((lng2 - lng1) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+
+        return 2 * R * Math.asin(Math.sqrt(a));
+      }
+
+      // Update findNearestPoint function to handle coordinate normalization
+      function findNearestPoint(lat, lng, data) {
+        let nearest = null;
+        let minDist = Infinity;
+        const MAX_DISTANCE = 200; // Reduced from 1000 to 200 km for more precise matching
+
+        // Normalize input longitude
+        lng = ((lng + 180) % 360) - 180;
+
+        data.forEach((point) => {
+          // Use both 'lng' and 'long' properties since data might have either
+          const pointLng = ((point.long || point.lng + 180) % 360) - 180;
+          const dist = getDistance(lat, lng, point.lat, pointLng);
+          if (dist < minDist && dist < MAX_DISTANCE) {
+            minDist = dist;
+            nearest = point;
+          }
+        });
+
+        // Add debug output
+        console.log("Finding nearest point to:", { lat, lng });
+        console.log("Found point:", nearest);
+        console.log("Distance:", minDist.toFixed(2), "km");
+
+        return nearest;
+      }
+
+      // Modify the showNearestPointInfo function to better handle ratios
+      function showNearestPointInfo(point) {
+        if (!point) return;
+
+        let infoHtml = `
+          <div style="
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            min-width: 150px;
+          ">
+            <div><b>Clicked Location:</b></div>
+            <div>Lat: ${point.lat.toFixed(4)}°</div>
+            <div>Lng: ${point.lng.toFixed(4)}°</div>`;
+
+        if (currentData.length) {
+          const nearest = findNearestPoint(point.lat, point.lng, currentData);
+          if (nearest) {
+            const distance = getDistance(
+              point.lat,
+              point.lng,
+              nearest.lat,
+              nearest.long || nearest.lng
+            );
+            infoHtml += `
+              <div style="margin-top: 10px;"><b>Nearest Data Point:</b></div>
+              <div>Lat: ${nearest.lat.toFixed(4)}°</div>
+              <div>Lng: ${(nearest.long || nearest.lng).toFixed(4)}°</div>
+              <div>Distance: ${distance.toFixed(2)} km</div>`;
+
+            // Check if we have ratio data (element1/element2 present)
+            if (nearest.element1 && nearest.element2) {
+              infoHtml += `
+                <div><b>Elements:</b> ${nearest.element1}/${
+                nearest.element2
+              }</div>
+                <div><b>Ratio:</b> ${nearest.ratio.toFixed(3)}</div>
+                <div><b>${nearest.element1}:</b> ${nearest.abundance1.toFixed(
+                2
+              )}%</div>
+                <div><b>${nearest.element2}:</b> ${nearest.abundance2.toFixed(
+                2
+              )}%</div>`;
+            }
+            // Check if we have single element abundance data
+            else if (nearest.element) {
+              infoHtml += `
+                <div><b>Element:</b> ${nearest.element}</div>
+                <div><b>Abundance:</b> ${nearest.abundance.toFixed(2)}%</div>`;
+            }
+            // If we have just ratio data without element names
+            else if (nearest.ratio !== undefined) {
+              const primaryElement =
+                document.getElementById("primaryElement").value;
+              const secondElement =
+                document.getElementById("secondElement").value;
+              if (primaryElement && secondElement) {
+                infoHtml += `
+                  <div><b>Elements:</b> ${primaryElement}/${secondElement}</div>
+                  <div><b>Ratio:</b> ${nearest.ratio.toFixed(3)}</div>`;
+              }
+            }
+
+            if (nearest.date) {
+              infoHtml += `<div><b>Date:</b> ${nearest.date}</div>`;
+            }
           } else {
-            console.error("Unexpected data format. Expected an array.");
-            return []; // Return an empty list if data isn't an array
+            infoHtml += `<div style="margin-top: 10px; color: #ff9999;">No data points within 1000 km of this location</div>`;
           }
-        } catch (error) {
-          console.error("Fetch error:", error);
-          return []; // Return an empty list in case of an error
         }
+
+        infoHtml += "</div>";
+        document.getElementById("info-panel").innerHTML = infoHtml;
       }
 
-      // Fix the getAbundance function
-      async function getAbundance(element, date = null) {
-        if (!element) return []; // Return empty array if no element provided
-
-        // Use port 3000 and add leading slash
-        let url = `http://127.0.0.1:3000/abundance?element=${encodeURIComponent(
-          element
-        )}`;
-
-        if (date) {
-          url += `&date=${encodeURIComponent(date)}`;
-        }
+      // Update the data transformation in fetchData function
+      async function fetchData(element1, element2 = null) {
+        if (isProcessing) return;
+        isProcessing = true;
+        updateStatus("Fetching data...");
+        document.querySelector(".loading").style.display = "block";
 
         try {
+          console.time("fetchData Total Time"); // Start total timer
+
+          // Prepare URL
+          console.time("Construct URL");
+          const url = element2
+            ? `/ratio?element=${element1}&element2=${element2}`
+            : `/abundance?element=${element1}`;
+          console.timeEnd("Construct URL");
+
+          // Fetch data
+          console.time("Fetch Data");
           const response = await fetch(url);
           const data = await response.json();
+          console.timeEnd("Fetch Data");
 
-          if (response.ok) {
-            return data;
-          } else {
-            console.error("Server error:", data.error || "Unknown error");
-            return [];
+          if (!data || !Array.isArray(data) || !data.length) {
+            updateStatus("No data available");
+            globe.heatmapsData([]); // Clear existing heatmap
+            currentData = [];
+            console.timeEnd("fetchData Total Time"); // End total timer
+            return;
           }
+
+          updateStatus("Processing data...");
+          console.time("Process Data");
+
+          // Transform data
+          currentData = data.map((d) => ({
+            lat: parseFloat(d.lat),
+            lng: parseFloat(d.long || d.lng || 0), // Handle both long and lng
+            value: parseFloat(element2 ? d.ratio : d.abundance),
+            element: d.element,
+            element1: d.element1,
+            element2: d.element2,
+            abundance: parseFloat(d.abundance),
+            abundance1: parseFloat(d.abundance1),
+            abundance2: parseFloat(d.abundance2),
+            ratio: parseFloat(d.ratio),
+            date: d.date,
+          }));
+
+          // Filter invalid data points
+          currentData = currentData.filter(
+            (d) =>
+              !isNaN(d.lat) &&
+              !isNaN(d.lng) &&
+              !isNaN(d.value) &&
+              d.value !== null &&
+              d.value !== undefined
+          );
+
+          console.timeEnd("Process Data");
+
+          console.log("Processed data:", currentData[0]); // Debug first data point
+
+          // Set heatmap data
+          console.time("Set Heatmap Data");
+          globe
+            .heatmapsData([currentData])
+            .heatmapPointLat((d) => d.lat)
+            .heatmapPointLng((d) => d.lng)
+            .heatmapPointWeight((d) => d.value);
+          adjustHeatmapMaterial();
+          console.timeEnd("Set Heatmap Data");
+
+          // Find min and max values for color scaling
+          if (currentData.length > 0) {
+            const values = currentData
+              .map((p) => p.value)
+              .filter((v) => v != null);
+            let min = values.reduce(
+              (acc, val) => (val < acc ? val : acc),
+              Infinity
+            );
+            let max = values.reduce(
+              (acc, val) => (val > acc ? val : acc),
+              -Infinity
+            );
+            min = 0;
+            max = 100;
+            updateColorScale(min || 0, max || 100);
+            updateLegendLabel(element1, element2);
+          }
+
+          updateStatus(`Done - ${currentData.length} points loaded`);
+          console.log(`Loaded ${currentData.length} points`);
         } catch (error) {
-          console.error("Fetch error:", error);
-          return [];
+          console.error("Error:", error);
+          updateStatus("Error loading data");
+        } finally {
+          isProcessing = false;
+          document.querySelector(".loading").style.display = "none";
         }
       }
 
-      async function getData() {
-        // let naka = await fetch("../static/cleanedData.json");
+      // Initialize color scale
+      const colorScale = d3
+        .scaleSequential()
+        .interpolator((t) => d3.interpolateRdYlBu(1 - t)) // Flip the color interpolator
+        .clamp(true);
 
-        // nakaData = await naka.json();
+      // Update the color legend
+      function updateColorScale(min, max) {
+        if (min === undefined || max === undefined) {
+          min = 0;
+          max = 100;
+        }
 
-        // let apollo = await fetch("../static/Apollo_seismic_network.json");
+        const canvas = document.getElementById("colorScale");
+        if (!canvas) return;
 
-        // apolloSeismic = await apollo.json();
+        const ctx = canvas.getContext("2d");
+        const gradient = ctx.createLinearGradient(0, 0, 200, 0);
 
-        // let plots = await fetch("./plots/plot_dict.json");
+        // Generate gradient stops
+        for (let i = 0; i <= 1; i += 0.1) {
+          const color = d3.interpolateRdYlBu(1 - i);
+          gradient.addColorStop(i, color);
+        }
 
-        // plot_data = await plots.json();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 200, 20);
 
-        // let moonlandings = await fetch("../static/moon_lands.json");
-
-        // moonland_data = await moonlandings.json();
-        moonland_data = [];
-
-        // for (let index = 0; index < apolloSeismic.length; index++) {
-        //   markdata.push({
-        //     nak: false,
-        //     lat: apolloSeismic[index].lat,
-        //     lng: apolloSeismic[index].lng,
-        //     mission: apolloSeismic[index].mission,
-        //     name: apolloSeismic[index].name,
-        //     svalue: `s${apolloSeismic[index].mission.split(" ")[1]}`,
-        //   });
-        // }
-
-        start();
-      }
-
-      async function callPythonScript(arg1, arg2) {
-        const data = {
-          arg1: arg1,
-          arg2: arg2,
-        };
-
-        try {
-          const response = await fetch("http://127.0.0.1:5000/run-python", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(data),
-            // body: JSON.stringify(data),
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-
-          const nakData_val = await response.json();
-          return nakData_val; // Return the JSON object directly
-        } catch (error) {
-          console.error("Fetch error:", error);
-          return null; // Return null or handle the error as needed
+        const lowLabel = document.getElementById("legendMin");
+        const highLabel = document.getElementById("legendHigh");
+        if (lowLabel && highLabel) {
+          lowLabel.textContent = min.toFixed(2);
+          highLabel.textContent = max.toFixed(2);
         }
       }
 
-      function start() {
-  const moon = Globe()
-    .globeImageUrl("../static/lunar_surface.jpg")
-    .bumpImageUrl("../static/lunar_bumpmap.jpg")
-    .backgroundImageUrl(
-      "https://unpkg.com/three-globe@2.24.7/example/img/night-sky.png"
-    )
-    .showGraticules(false)
-    .showAtmosphere(false)
-    .labelText((d) => d.element || d.name)
-    .labelSize((d) => {
-      // Dynamic label size based on abundance or a default value
-      return d.abundance 
-        ? Math.sqrt(d.abundance) * 0.5  // Adjust multiplier as needed
-        : 1.5;
-    })
-    .labelDotRadius((d) => {
-      // Dynamic dot radius based on abundance or a default value
-      return d.abundance 
-        ? Math.sqrt(d.abundance) * 0.2  // Adjust multiplier as needed
-        : 0.4;
-    })
-    .labelColor((d) => {
-      // Use color based on abundance or a default color
-      return d.abundance 
-        ? colorScale(d.abundance)  // Use your existing color scale
-        : 'rgba(255, 165, 0, 0.75)';  // Orange color from world cities example
-    })
-    .labelResolution(2)
-    .labelDotOrientation((d) =>
-      labelsTopOrientation.has(d.label) ? "top" : "bottom"
-    )
-    .htmlElementsData(markdata)
-    .htmlElement((d) => {
-      const el = document.createElement("div");
-      
-      // Create a marker with size and color based on abundance
-      const abundance = d.abundance || 0;
-      const size = Math.sqrt(abundance) * 10;  // Adjust multiplier as needed
-      const color = colorScale(abundance);
-
-      el.innerHTML = `
-        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background-color: ${color}; 
-                    display: flex; justify-content: center; align-items: center; 
-                    cursor: pointer;" 
-             title="${d.element || 'Marker'} - ${abundance.toFixed(2)}%">
-          <span style="color: white; font-size: ${size/2}px;">${d.element ? d.element[0] : ''}</span>
+      // Replace the simple legend div with a more detailed one
+      document.querySelector(".legend").innerHTML = `
+      <div>
+        <canvas id="colorScale" width="200" height="20"></canvas>
+        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+          <span id="legendMin">0.00</span>
+          <span id="legendHigh">100.00</span>
         </div>
-      `;
+        <div id="legendLabel" style="text-align: center; margin-top: 5px;">
+          Abundance (%)
+        </div>
+      </div>
+    `;
 
-      el.style.position = 'absolute';
-      el.style.transform = 'translate(-50%, -50%)';
-      
-      // Optional: Add hover information
-      el.addEventListener('mouseover', (event) => {
-        const infoDiv = document.createElement('div');
-        infoDiv.style.position = 'absolute';
-        infoDiv.style.backgroundColor = 'rgba(0,0,0,0.7)';
-        infoDiv.style.color = 'white';
-        infoDiv.style.padding = '5px';
-        infoDiv.style.borderRadius = '5px';
-        infoDiv.style.top = '-30px';
-        infoDiv.innerHTML = `
-          Element: ${d.element}<br>
-          Abundance: ${abundance.toFixed(2)}%<br>
-          Lat: ${d.lat.toFixed(2)}, Long: ${d.lng.toFixed(2)}
-        `;
-        event.currentTarget.appendChild(infoDiv);
-      });
-
-      el.addEventListener('mouseout', (event) => {
-        const infoDiv = event.currentTarget.querySelector('div');
-        if (infoDiv) {
-          event.currentTarget.removeChild(infoDiv);
+      // Update legend label based on visualization type
+      function updateLegendLabel(element1, element2) {
+        const legendLabel = document.getElementById("legendLabel");
+        if (element2) {
+          legendLabel.textContent = `${element1}/${element2} Ratio`;
+        } else {
+          legendLabel.textContent = `${element1} Abundance (%)`;
         }
+      }
+
+      // Event Listeners
+      document
+        .getElementById("primaryElement")
+        .addEventListener("change", (e) => {
+          const element1 = e.target.value;
+          const element2 = document.getElementById("secondElement").value;
+          if (element1) fetchData(element1, element2 || null);
+        });
+
+      document
+        .getElementById("secondElement")
+        .addEventListener("change", (e) => {
+          const element1 = document.getElementById("primaryElement").value;
+          const element2 = e.target.value;
+          if (element1) fetchData(element1, element2 || null);
+        });
+
+      document.getElementById("clearMap").addEventListener("click", () => {
+        updateStatus("Clearing...");
+        globe.pointsData([]);
+        currentData = [];
+        document.getElementById("primaryElement").value = "";
+        document.getElementById("secondElement").value = "";
+        updateStatus("");
       });
 
-      return el;
-    })
-    .labelsData(moonland_data)(document.getElementById("globeViz"));
-        
-          const camera = moon.camera();
-  const controls = moon.controls();
-  const infoPanel = document.getElementById('info-panel');
+      // Initialize color legend
+      const canvas = document.createElement("canvas");
+      canvas.id = "colorScale";
+      canvas.width = 200;
+      canvas.height = 20;
+      document.querySelector(".legend").prepend(canvas);
+      updateColorScale(0, 100);
 
-  const UPDATE_INTERVAL = 1000;
-  let lastUpdateTime = 0;
+      // info panel code
+      if (true) {
+        const camera = globe.camera();
+        const controls = globe.controls();
+        const infoPanel = document.getElementById("info-panel");
 
-  // Function to update the info panel
-  function updateInfoPanel() {
-    const cursorPos = controls.target;      
+        const UPDATE_INTERVAL = 1000;
+        let lastUpdateTime = 0;
 
-    const fov = camera.fov * (Math.PI / 180); // Convert FOV to radians
-    const distance = camera.position.length();
-    const projected_dim = (2 * Math.tan(fov / 2) * distance);
-    const resolution = (2 * Math.tan(fov / 2) * distance) / window.innerWidth;
-    
+        // Function to update the info panel
+        function updateGlobeInfo() {
+          const fov = camera.fov * (Math.PI / 180); // Convert FOV to radians
+          const distance = camera.position.length();
+          const projected_dim = 2 * Math.tan(fov / 2) * distance;
+          const resolution =
+            (2 * Math.tan(fov / 2) * distance) / window.innerWidth;
 
-    // Display relevant information
-    infoPanel.innerHTML = `
+          // Display relevant information
+          document.getElementById("globe-info").innerHTML = `
       <strong>Globe Info:</strong><br>
       Field of view: ${camera.fov.toFixed(2)} deg<br>
       Distance from centre : ${distance.toFixed(2)} units<br>
       Spatial Resolution: ${resolution.toFixed(5)} units/pixel<br>      
       Projected diamter: ${projected_dim.toFixed(5)} units<br>      
-      Window size: ${window.innerWidth} pixels<br>      
+      Window size: ${window.innerWidth} pixels<br> 
+      Number of points plotted: ${currentData.length}<br>     
       Updated every ${UPDATE_INTERVAL} ms
     `;
-    // Cursor Position: (X: ${cursorPos.x.toFixed(2)}, Y: ${cursorPos.y.toFixed(2)}, Z: ${cursorPos.z.toFixed(2)}) <br>
-  }
-
-  // Animation loop with controlled updates
-  function animate(time) {
-    requestAnimationFrame(animate);
-    controls.update(); // Update camera controls
-
-    if (time - lastUpdateTime > UPDATE_INTERVAL) {
-      updateInfoPanel();
-      lastUpdateTime = time;
-    }
-  }
-
-  animate(0); // Start animation loop
-        const colorInterpolator = (t) => `rgba(255,100,50,${Math.sqrt(1 - t)})`;
-
-        function clearTab(event) {
-          // document.getElementById("contdata").style.display = "none";
-          document.getElementById("nakamura").style.display = "block";
-          // document.getElementById("con").style.borderBottom = "none";
-          document.getElementById("nak").style.borderBottom = "2px solid white";
-
-          let divs = document.querySelectorAll(".nakEvent");
-
-          for (const child of divs) {
-            child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
-          }
-
-          markdata = [];
-
-          gData = [];
-
-          moon.ringsData([]);
-          moon.htmlElementsData([]);
         }
 
-
-        // document.getElementById("nak").addEventListener("click", clearTab);
-
-       
-
-        // Function to clear map and reset data
-        function clearMapData() {
-          // Reset the markdata and gData arrays
-          markdata = [];
-          gData = [];
-
-          // Clear the ringsData and htmlElementsData
-          moon.ringsData([]);
-          moon.htmlElementsData([]);
-
-          // Reset the background color of elements with class '.nakEvent'
-          let divs = document.querySelectorAll(".nakEvent");
-          for (const child of divs) {
-            child.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+        // Animation loop with controlled updates
+        function animate(time) {
+          if (!window.animationFrameId) {
+            window.animationFrameId = requestAnimationFrame(animate);
           }
+
+          if (time - lastUpdateTime > UPDATE_INTERVAL) {
+            updateGlobeInfo(); // Update the globe info only
+            lastUpdateTime = time;
+            controls.update();
+          }
+
+          window.animationFrameId = requestAnimationFrame(animate);
         }
 
-        // Add event listener to the "clearMap" button
-        document
-          .getElementById("clearMap")
-          .addEventListener("click", (event) => {
-            clearMapData(); // Call the function when the button is clicked
-          });
-
-   
-        // Update the showNaka function to handle errors better
-        async function showNaka(event) {
-          if (
-            !event.currentTarget ||
-            !event.currentTarget.hasAttribute("nakNum")
-          ) {
-            console.error("Invalid event target");
-            return;
+        // Clean up animation when window loses focus
+        window.addEventListener("blur", () => {
+          if (window.animationFrameId) {
+            cancelAnimationFrame(window.animationFrameId);
+            window.animationFrameId = null;
           }
+        });
 
-          let index = event.currentTarget.getAttribute("nakNum");
-          let element = element_list[index];
-
-          if (!element) {
-            console.error("No element selected");
-            return;
+        // Restore animation when window gains focus
+        window.addEventListener("focus", () => {
+          if (!window.animationFrameId) {
+            animate(0);
           }
+        });
 
-          let secondElement = document.getElementById("secondElement").value;
-
-          clearMapData();
-
-          event.currentTarget.children[0].style.backgroundColor =
-            "rgba(192, 192, 192, 0.6)";
-
-          // Fetch abundance data
-          markdata = (await getAbundance(element)) || [];
-
-          if (markdata.length === 0) {
-            console.warn("No abundance data received");
-            return;
-          }
-
-          // If second element selected, fetch ratio data
-          if (secondElement) {
-            const ratioData =
-              (await fetchPllottingData("ratio", element, secondElement)) || [];
-
-            // Merge ratio data with abundance data
-            markdata = markdata.map((item) => {
-              const ratioPoint = ratioData.find(
-                (r) => r.lat === item.lat && r.long === item.long
-              );
-              return {
-                ...item,
-                lng: item.long,
-                element: element,
-                ratio: ratioPoint ? ratioPoint.ratio : null,
-                ratio_element: secondElement,
-              };
-            });
-          } else {
-            markdata = markdata.map((item) => ({
-              ...item,
-              lng: item.long,
-              element: element,
-            }));
-          }
-
-          // / Update the color scale domain based on the abundance values
-          const abundances = markdata.map((d) => d.abundance);
-          const minAbundance = Math.min(...abundances);
-          const maxAbundance = Math.max(...abundances);
-          colorScale.domain([minAbundance, maxAbundance]);
-
-          // Update the display
-          moon.htmlElementsData(markdata);
-
-          // Update rings
-          // gData = markdata.map((data) => ({
-          //   lat: data.lat,
-          //   lng: data.long,
-          //   maxR: 2, // Smaller fixed radius for circles
-          //   abundance: data.abundance, // Pass abundance for coloring
-          //   ringWidth: 0.5, // Thinner rings for better visibility
-          // }));
-          // moon.ringsData(gData);
-        }
-
-        let naks = document.getElementById("naklabels");
-
-        for (const child of naks.children) {
-          child.style.cursor = "pointer";
-          child.addEventListener("click", showNaka);
-        }
-
-        // Add event listener for second element changes
-        document
-          .getElementById("secondElement")
-          .addEventListener("change", async (event) => {
-            // Retrigger the currently selected element's data fetch
-            const activeElement = document.querySelector(
-              '.nakEvent[style*="background-color: rgba(192, 192, 192, 0.6)"]'
-            );
-            if (activeElement) {
-              activeElement.parentElement.click();
-            }
-          });
+        animate(0); // Start animation loop
       }
 
-      getData();
+      // Add this throttle function at the top of your script
+      function throttle(func, limit) {
+        let inThrottle;
+        return function (...args) {
+          if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => (inThrottle = false), limit);
+          }
+        };
+      }
+    </script>
+  </body>
+</html>

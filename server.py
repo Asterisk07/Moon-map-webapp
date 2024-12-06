@@ -1,25 +1,28 @@
 import json
 from flask import Flask, request, jsonify, render_template
 import sqlite3
-import pandas as pd 
+import pandas as pd
 import numpy as np
 from sklearn.cluster import MiniBatchKMeans
 from functools import lru_cache
 import math
 from time import perf_counter_ns
+import time
 
 # Removed unused imports like subprocess
 
-FETCH_LIMIT = 100000
-# FETCH_LIMIT = None
+# FETCH_LIMIT = 50000
+FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
 # DATABASE_PATH = 'database/abundances_new.db'
 DATABASE_PATH = 'database/abundances.db'
+element_list = ['Fe', 'Ti', 'Ca', 'Si', 'Al', 'Mg', 'Na']
 
 MAX_CLUSTERS = 5000
 MIN_CLUSTERS = 1000
 CACHE_SIZE = 32  # Number of recent results to cache
+
 
 def fetch_points_for_tile(x, y, zoom):
     bbox = tile_to_bbox(x, y, zoom)
@@ -69,15 +72,19 @@ def fetch_points():
 @app.route('/')
 def index():
     return render_template('index with infobox.html')
-    # return render_template('index.html')
+    # return render_template('index backup.html')
 
 
 @app.route('/run-python', methods=['POST'])
 def run_python_script():
     raise Exception("Not implemented")
 
+# def query_db(query, params=(), limit=FETCH_LIMIT):
+#     db_path = DATABASE_PATH
+#     connection = sqlite3.connect(db_path)
 
-def query_db(query, params=()):
+
+def query_db(query, params=(), limit=FETCH_LIMIT):
     print(f"\nExecuting query with params: {params}")
     print(f"Query: {query}")
 
@@ -85,6 +92,9 @@ def query_db(query, params=()):
     try:
         with sqlite3.connect(db_path) as connection:
             start_time = perf_counter_ns()
+            # Add LIMIT clause if a limit is specified
+            if limit is not None:
+                query += f" LIMIT {limit}"
             df = pd.read_sql_query(query, connection, params=params)
             query_time = (perf_counter_ns() - start_time) / 1e6
 
@@ -93,17 +103,86 @@ def query_db(query, params=()):
             return []
 
         print(f"Query returned {len(df)} rows in {query_time:.2f}ms")
-        print("Sample data:", df.iloc[0].to_dict() if len(df) > 0 else "No data")
+        print("Sample data:", df.iloc[0].to_dict()
+              if len(df) > 0 else "No data")
         return df.to_dict(orient='records')
     except Exception as e:
         print(f"Database error: {str(e)}")
         return []
 
 
+if True:
+    # fetching all points
+    query = "SELECT * FROM abundances"
+    data = []
+    # Start the timer to measure the query execution time
+    start_time = time.time()
+
+    result = query_db(query, data, FETCH_LIMIT)
+
+    end_time = time.time()
+    # Print the time taken to perform the query
+    print(f"time to fetch : {end_time - start_time:.4f} seconds")
+
+    # constructing the tree
+    import time
+    from sklearn.neighbors import KDTree
+    import numpy as np
+
+    points = result
+
+    # Create a KDTree for each element
+    element_trees = {}
+
+    # Start the timer to measure the query execution time
+    start_time = time.time()
+
+    for element in element_list:
+        element_points = [(point['lat'], point['long'])
+                          for point in points if point['element'] == element]
+        element_trees[element] = KDTree(np.array(element_points))
+
+    end_time = time.time()
+    # Print the time taken to perform the query
+    print(f"Trees creation time : {end_time - start_time:.4f} seconds")
+
+# Query function
+
+
+def get_nearby_points(query_point, radius_degrees, element):
+    query_array = np.array([query_point])
+
+    # Query the relevant tree for the specified element
+    tree = element_trees.get(element)
+    if tree:
+        indices = tree.query_radius(query_array, r=radius_degrees)
+        return [points[i] for i in indices[0]]
+    else:
+        return []
+
+# API endpoint to call the function
+# @app.route('/get-nearby-points', methods=['GET'])
+
+
+@app.route('/getnear', methods=['GET'])
+def get_nearby_points_endpoint():
+    lat = float(request.args.get('lat'))
+    lng = float(request.args.get('lng'))
+    element = request.args.get('element')
+    # Default to 2.0 if not provided
+    radius = float(request.args.get('radius', 2.0))
+
+    # Call the function
+    nearby_points = get_nearby_points((lat, lng), radius, element)
+
+    return jsonify(nearby_points)
+
+
 @lru_cache(maxsize=CACHE_SIZE)
 def cached_cluster_data(data_key, n_clusters):
     """Cached version of clustering to avoid recomputing for same parameters"""
     return cluster_data(json.loads(data_key), n_clusters)
+
 
 def estimate_clusters(data_length, zoom_level=None):
     """Estimate optimal number of clusters based on data size and zoom"""
@@ -113,35 +192,38 @@ def estimate_clusters(data_length, zoom_level=None):
     else:
         # Adjust clusters based on zoom level
         base_clusters = math.ceil(data_length / 50)
-        zoom_factor = math.pow(2, zoom_level - 2)  # Adjust clusters based on zoom
+        # Adjust clusters based on zoom
+        zoom_factor = math.pow(2, zoom_level - 2)
         return min(MAX_CLUSTERS, max(MIN_CLUSTERS, math.ceil(base_clusters * zoom_factor)))
+
 
 def cluster_data(data, n_clusters=None):
     print(f"\nStarting clustering of {len(data)} points")
-    
+
     # Estimate clusters if not specified
     n_clusters = n_clusters or estimate_clusters(len(data))
-    
+
     if len(data) <= n_clusters:
         print("No clustering needed, data points <= n_clusters")
         return data
-        
+
     start_time = perf_counter_ns()
     coords = np.array([[d['lat'], d['long']] for d in data])
     values = np.array([d.get('abundance', d.get('ratio', 0)) for d in data])
-    
+
     print(f"Running KMeans clustering with {n_clusters} clusters")
     kmeans = MiniBatchKMeans(
         n_clusters=n_clusters,
-        batch_size=min(10000, len(data)),  # Larger batch size for faster processing
+        # Larger batch size for faster processing
+        batch_size=min(10000, len(data)),
         max_iter=100,                       # Limit iterations
         init_size=min(10000, len(data)),   # Smaller init sample
         random_state=42                     # For consistent results
     )
-    
+
     # Process in batches for large datasets
     cluster_labels = kmeans.fit_predict(coords)
-    
+
     clustered_data = []
     for i in range(n_clusters):
         mask = cluster_labels == i
@@ -150,10 +232,11 @@ def cluster_data(data, n_clusters=None):
             cluster_values = values[mask]
             center = cluster_points.mean(axis=0)
             mean_value = cluster_values.mean()
-            
+
             # Get sample point for element info
-            sample_point = next(p for p in data if p['lat'] == coords[mask][0][0] and p['long'] == coords[mask][0][1])
-            
+            sample_point = next(
+                p for p in data if p['lat'] == coords[mask][0][0] and p['long'] == coords[mask][0][1])
+
             cluster_point = {
                 'lat': float(center[0]),
                 'long': float(center[1]),
@@ -167,21 +250,24 @@ def cluster_data(data, n_clusters=None):
                 'abundance2': sample_point.get('abundance2')
             }
             clustered_data.append(cluster_point)
-    
-    cluster_time = (perf_counter_ns() - start_time) / 1e6  # Convert to milliseconds
+
+    cluster_time = (perf_counter_ns() - start_time) / \
+        1e6  # Convert to milliseconds
     print(f"Clustering completed in {cluster_time:.2f}ms")
     print(f"Reduced {len(data)} points to {len(clustered_data)} clusters")
-    
+
     return clustered_data
+
 
 def normalize_longitude(lng):
     """Normalize longitude to [-180, 180] range"""
     return ((lng + 180) % 360) - 180
 
+
 @app.route('/abundance', methods=['GET'])
 def get_abundance():
     element = request.args.get('element')
-    
+
     if not element or element == 'undefined':
         return jsonify({"error": "Element parameter is required"}), 400
 
@@ -192,17 +278,18 @@ def get_abundance():
             WHERE element = ?
         """
         result = query_db(query, (element,))
-        
+
         if not result:
             print(f"No data found for element: {element}")
             return jsonify([])
-            
+
         print(f"Found {len(result)} points for {element}")
         return jsonify(result)
 
     except Exception as e:
         print(f"Error in get_abundance: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/ratio', methods=['GET'])
 def get_ratio():
@@ -230,11 +317,11 @@ def get_ratio():
             AND a2.element = ?
         """
         result = query_db(query, (element1, element2))
-        
+
         if not result:
             print(f"No data found for ratio {element1}/{element2}")
             return jsonify([])
-            
+
         print(f"Found {len(result)} ratio points")
         return jsonify(result)
 
