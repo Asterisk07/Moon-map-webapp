@@ -10,8 +10,8 @@ from time import perf_counter_ns
 
 # Removed unused imports like subprocess
 
-FETCH_LIMIT = 2000
-# FETCH_LIMIT = None
+# FETCH_LIMIT = 2000
+FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
 # DATABASE_PATH = 'database/abundances_new.db'
@@ -70,7 +70,7 @@ def fetch_points():
 @app.route('/')
 def index():
     # return render_template('index with infobox.html')
-    return render_template('index backup.html')
+    return render_template('index_each_point.html')
 
 
 @app.route('/run-python', methods=['POST'])
@@ -262,4 +262,4 @@ def get_ratio():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=1234)
+    app.run(debug=True, port=4321)

@@ -137,7 +137,7 @@
         )
         .showGraticules(false)
         .showAtmosphere(false)
-        .pointRadius(3) // .pointRadius(0.5)
+        .pointRadius(1.5) // .pointRadius(0.5)
         .pointColor(() => "#ff0000")
         .pointAltitude(0) // Set to 0 to make markers flat on surface
         .pointResolution(64) // Increase point resolution for smoother appearance
@@ -235,9 +235,19 @@
             ? `/ratio?element=${element1}&element2=${element2}`
             : `/abundance?element=${element1}`;
 
-          const response = await fetch(url);
-          const data = await response.json();
+          // const response = await fetch(url);
+          // const data = await response.json();
 
+          let clusterData;
+
+          await fetch("static/clusters.json") // Path relative to the location of index.html
+            .then((response) => response.json()) // Parse the response as JSON
+            .then((data) => {
+              clusterData = data[element1];
+            })
+            .catch((error) => console.error("Error fetching JSON:", error));
+
+          let data = clusterData;
           if (!data.length) {
             alert("No data available for selected elements");
             return;
@@ -248,10 +258,10 @@
             ? data.map((d) => d.ratio)
             : data.map((d) => d.abundance);
 
-          // const min = Math.min(...values);
-          // const max = Math.max(...values);
-          const min = 0;
-          const max = 100;
+          const min = Math.min(...values);
+          const max = Math.max(...values);
+          // const min = 0;
+          // const max = 100;
 
           colorScale.domain([min, max]);
           updateColorScale(min, max);

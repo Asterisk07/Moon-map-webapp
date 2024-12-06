@@ -9,7 +9,6 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://unpkg.com/globe.gl"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <style>
       body {
@@ -42,13 +41,11 @@
       #info-panel {
         position: absolute;
         top: 10px;
-        right: 200px;
+        right: 10px;
         padding: 10px;
-        background: rgba(0, 0, 0, 0.7);
+        background: rgba(0, 0, 0, 0.8);
         color: white;
-        font-family: Arial, sans-serif;
-        font-size: 14px;
-        border-radius: 8px;
+        border-radius: 5px;
       }
 
       .loading {
@@ -124,9 +121,9 @@
       </div>
     </div>
 
+    <div id="info-panel"></div>
     <div class="loading">Loading data...</div>
     <div id="globeViz"></div>
-    <div id="info-panel"></div>
 
     <script>
       let currentData = [];
@@ -140,7 +137,7 @@
         )
         .showGraticules(false)
         .showAtmosphere(false)
-        .pointRadius(0.5)
+        .pointRadius(0.5) // .pointRadius(3) //
         .pointColor(() => "#ff0000")
         .pointAltitude(0) // Set to 0 to make markers flat on surface
         .pointResolution(64) // Increase point resolution for smoother appearance
@@ -238,17 +235,8 @@
             ? `/ratio?element=${element1}&element2=${element2}`
             : `/abundance?element=${element1}`;
 
-          console.time("fetchData"); // Start timer for the entire function
-
-          // const startFetch = Date.now();
-          console.time("fetchRequest"); // Start timer for the fetch request
-
           const response = await fetch(url);
           const data = await response.json();
-
-          console.timeEnd("fetchRequest"); // End timer for fetch request
-          // const fetchDuration = Date.now() - startFetch;
-          // console.log(`Fetch duration: ${fetchDuration} ms`);
 
           if (!data.length) {
             alert("No data available for selected elements");
@@ -256,38 +244,20 @@
           }
 
           // Process data for visualization
-          const startMap = Date.now();
-          console.log(data.length);
           const values = element2
             ? data.map((d) => d.ratio)
             : data.map((d) => d.abundance);
 
-          console.timeEnd("fetchData"); // End timer for the entire function
+          const min = Math.min(...values);
+          const max = Math.max(...values);
+          // const min = 0;
+          // const max = 100;
 
-          // console.log("mapped successfully");
-
-          console.time("minMaxCalculation"); // Start timer for min/max calculation
-          const min = values.reduce(
-            (acc, val) => (val < acc ? val : acc),
-            Infinity
-          );
-          const max = values.reduce(
-            (acc, val) => (val > acc ? val : acc),
-            -Infinity
-          );
-          console.timeEnd("minMaxCalculation"); // End timer for min/max calculation
-          console.log("min:", min);
-          console.log("max:", max);
-
-          // Update color scale and legend
-          console.time("colorScaleUpdate"); // Start timer for color scale update
           colorScale.domain([min, max]);
           updateColorScale(min, max);
           updateLegendLabel(element1, element2);
-          console.timeEnd("colorScaleUpdate"); // End timer for color scale update
 
-          // Update globe visualization
-          console.time("globeUpdate"); // Start timer for globe update
+          // Update globe visualization with correct abundance mapping
           globe
             .pointColor((d) => colorScale(element2 ? d.ratio : d.abundance))
             .pointsData(
@@ -304,9 +274,15 @@
                 element2: element2,
               }))
             );
-          console.timeEnd("globeUpdate"); // End timer for globe update
 
           currentData = data;
+
+          // Update info panel
+          const infoPanel = document.getElementById("info-panel");
+          infoPanel.innerHTML = `
+          <div>Points: ${data.length}</div>
+          <div>Range: ${min.toFixed(2)} - ${max.toFixed(2)}</div>
+        `;
         } catch (error) {
           console.error("Error fetching data:", error);
           alert("Error loading data");
@@ -337,7 +313,7 @@
         currentData = [];
         document.getElementById("primaryElement").value = "";
         document.getElementById("secondElement").value = "";
-        // document.getElementById("info-panel").innerHTML = "";
+        document.getElementById("info-panel").innerHTML = "";
       });
 
       // Initialize color legend
@@ -347,100 +323,6 @@
       canvas.height = 20;
       document.querySelector(".legend").prepend(canvas);
       updateColorScale(0, 100);
-
-      // const globeMesh = globe.scene.children.find(
-      //   (child) => child.type === "Mesh"
-      // );
-      // const globeMesh = globe.children.find((child) => child.isMesh);
-
-      // globe.onReady(() => {
-      //   globeMesh = globe.children.find((child) => child.isMesh);
-      // });
-
-      // info panel code
-      if (true) {
-        const camera = globe.camera();
-        const controls = globe.controls();
-        const infoPanel = document.getElementById("info-panel");
-
-        const UPDATE_INTERVAL = 1000;
-        let lastUpdateTime = 0;
-
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        // let lastUpdateTime = 0; // Initialize timestamp
-
-        document.addEventListener("mousemove", (event) => {
-          const currentTime = Date.now();
-
-          // Check if 1 second has passed since the last update
-          if (currentTime - lastUpdateTime < 1000) {
-            return; // Skip processing if cooldown is active
-          }
-
-          lastUpdateTime = currentTime; // Update the last processed time
-
-          mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-          mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-          raycaster.setFromCamera(mouse, camera);
-          const intersects = raycaster.intersectObject(globeMesh); // Assuming 'globeMesh' is the sphere
-
-          if (intersects.length > 0) {
-            const point = intersects[0].point;
-            const { lat, lon } = getLatLong(point);
-            console.log(`Latitude: ${lat}, Longitude: ${lon}`);
-          }
-        });
-
-        // Function to update the info panel
-        function updateInfoPanel() {
-          // const zoomLevel = camera.position.length(); // Camera distance (proxy for zoom)
-          // const spatialResolution = 1 / zoomLevel;    // Example resolution calculation
-
-          const cursorPos = controls.target; // Cursor position in world space (globe center point)
-
-          const fov = camera.fov * (Math.PI / 180); // Convert FOV to radians
-          const distance = camera.position.length();
-          const projected_dim = 2 * Math.tan(fov / 2) * distance;
-          const resolution =
-            (2 * Math.tan(fov / 2) * distance) / window.innerWidth;
-
-          const radius = cursorPos.length(); // Distance from center (assuming normalized globe)
-
-          // Convert to spherical coordinates
-          const lat = Math.asin(cursorPos.y / radius) * (180 / Math.PI); // Latitude in degrees
-          const lon = Math.atan2(cursorPos.z, cursorPos.x) * (180 / Math.PI); // Longitude in degrees
-
-          // Display relevant information
-          infoPanel.innerHTML = `
-      <strong>Globe Info:</strong><br>
-      Field of view: ${camera.fov.toFixed(2)} deg<br>
-      Distance from centre : ${distance.toFixed(2)} units<br>
-      Spatial Resolution: ${resolution.toFixed(5)} units/pixel<br>      
-      Projected diamter: ${projected_dim.toFixed(5)} units<br>      
-      Window size: ${window.innerWidth} pixels<br> 
-      Number of points plotted: ${currentData.length}<br>     
-      Updated every ${UPDATE_INTERVAL} ms
-    `;
-
-          // console.log("updating ${distance.toFixed(2)}");
-          // Cursor Position: (X: ${cursorPos.x.toFixed(2)}, Y: ${cursorPos.y.toFixed(2)}, Z: ${cursorPos.z.toFixed(2)}) <br>
-        }
-
-        // Animation loop with controlled updates
-        function animate(time) {
-          requestAnimationFrame(animate);
-          controls.update(); // Update camera controls
-
-          if (time - lastUpdateTime > UPDATE_INTERVAL) {
-            updateInfoPanel();
-            lastUpdateTime = time;
-          }
-        }
-
-        animate(0); // Start animation loop
-      }
     </script>
   </body>
 </html>
