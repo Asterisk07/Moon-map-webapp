@@ -81,6 +81,36 @@
         height: 20px;
         margin: 10px 0;
       }
+
+      #histogram {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+        color: white;
+        width: 400px; /* increased from 300px */
+      }
+
+      .histogram-bar {
+        fill: steelblue;
+      }
+
+      .histogram-bar:hover {
+        fill: #a1d4ff;
+      }
+
+      .axis text {
+        fill: white;
+        font-size: 10px;
+      }
+
+      .axis path,
+      .axis line {
+        stroke: #666;
+      }
     </style>
   </head>
   <body>
@@ -124,9 +154,14 @@
     <div id="info-panel"></div>
     <div class="loading">Loading data...</div>
     <div id="globeViz"></div>
+    <div id="histogram">
+      <h4 style="margin: 0 0 10px 0">Element Distribution</h4>
+      <div id="histogramChart"></div>
+    </div>
 
     <script>
       let currentData = [];
+      let histogramData = null;
 
       // Fix Globe initialization
       const globe = new Globe(document.getElementById("globeViz"))
@@ -306,12 +341,97 @@
           <div>Points: ${data.length}</div>
           <div>Range: ${min.toFixed(2)} - ${max.toFixed(2)}</div>
         `;
+
+          if (!histogramData) {
+            await loadHistogramData();
+          }
+          updateHistogram(element1);
         } catch (error) {
           console.error("Error fetching data:", error);
           alert("Error loading data");
         } finally {
           document.querySelector(".loading").style.display = "none";
         }
+      }
+
+      // Load histogram data
+      async function loadHistogramData() {
+        try {
+          const response = await fetch("../static/histograms.json");
+          histogramData = await response.json();
+        } catch (error) {
+          console.error("Error loading histogram data:", error);
+        }
+      }
+
+      // Create histogram visualization
+      function updateHistogram(element) {
+        if (!histogramData || !histogramData[element]) return;
+
+        // Clear previous histogram
+        d3.select("#histogramChart").html("");
+
+        const data = histogramData[element];
+        const margin = { top: 10, right: 20, bottom: 50, left: 50 }; // increased left margin
+        const width = 400 - margin.left - margin.right;
+        const height = 250 - margin.top - margin.bottom;
+
+        const svg = d3
+          .select("#histogramChart")
+          .append("svg")
+          .attr("width", width + margin.left + margin.right)
+          .attr("height", height + margin.top + margin.bottom)
+          .append("g")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Create bin labels
+        const binLabels = Array.from(
+          { length: 10 },
+          (_, i) => `${i * 5}% - ${(i + 1) * 5}%`
+        );
+
+        const x = d3
+          .scaleBand()
+          .domain(binLabels)
+          .range([0, width])
+          .padding(0.1);
+
+        const y = d3
+          .scaleLinear()
+          .domain([0, d3.max(data)])
+          .range([height, 0]);
+
+        // Add bars
+        svg
+          .selectAll("rect")
+          .data(data)
+          .enter()
+          .append("rect")
+          .attr("class", "histogram-bar")
+          .attr("x", (d, i) => x(binLabels[i]))
+          .attr("y", (d) => y(d))
+          .attr("width", x.bandwidth())
+          .attr("height", (d) => height - y(d));
+
+        // Add x-axis
+        svg
+          .append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(0,${height})`)
+          .call(d3.axisBottom(x))
+          .selectAll("text")
+          .style("text-anchor", "end")
+          .attr("dx", "-.8em")
+          .attr("dy", ".15em")
+          .attr("transform", "rotate(-45)");
+
+        // Add y-axis with percentage
+        svg
+          .append("g")
+          .attr("class", "axis")
+          .call(d3.axisLeft(y).tickFormat((d) => d + "%"));
+
+        // Removed x-axis label
       }
 
       // Event Listeners
@@ -346,6 +466,9 @@
       canvas.height = 20;
       document.querySelector(".legend").prepend(canvas);
       updateColorScale(0, 100);
+
+      // Load histogram data when page loads
+      loadHistogramData();
     </script>
   </body>
 </html>
