@@ -243,8 +243,21 @@
           await fetch("static/clusters.json") // Path relative to the location of index.html
             .then((response) => response.json()) // Parse the response as JSON
             .then((data) => {
-              clusterData = data[element1];
+              if (element2) {
+                clusterData = data[element1].map((point, index) => {
+                  return {
+                    ...point, // Copy all existing properties
+
+                    abundance1: point.abundance,
+                    abundance2: data[element2][index].abundance,
+                    ratio: point.abundance / data[element2][index].abundance,
+                  };
+                });
+              } else {
+                clusterData = data[element1];
+              }
             })
+
             .catch((error) => console.error("Error fetching JSON:", error));
 
           let data = clusterData;
