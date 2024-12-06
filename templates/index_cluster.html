@@ -146,7 +146,7 @@
           <option value="points">Show All Points</option>
         </select>
       </div>
-      <div id="dateSelector" style="display: none;">
+      <div id="dateSelector" style="display: none">
         <select id="dateFilter">
           <option value="">All Dates</option>
           <!-- Will be populated dynamically -->
@@ -164,9 +164,9 @@
       </div>
     </div>
 
-    <div id="info-panel"></div>
     <div class="loading">Loading data...</div>
     <div id="globeViz"></div>
+    <div id="info-panel"></div>
     <div id="histogram">
       <h4 style="margin: 0 0 10px 0">Element Distribution</h4>
       <div id="histogramChart"></div>
@@ -276,21 +276,27 @@
       }
 
       // Fetch and display data
-      async function fetchData(element1, element2 = null, plotType = 'clusters') {
+      async function fetchData(
+        element1,
+        element2 = null,
+        plotType = "clusters"
+      ) {
         document.querySelector(".loading").style.display = "block";
 
         try {
           const selectedDate = document.getElementById("dateFilter").value;
           const url = element2
             ? `/ratio?element=${element1}&element2=${element2}&plotType=${plotType}`
-            : `/abundance?element=${element1}&plotType=${plotType}${selectedDate ? '&date=' + selectedDate : ''}`;
+            : `/abundance?element=${element1}&plotType=${plotType}${
+                selectedDate ? "&date=" + selectedDate : ""
+              }`;
 
           // Adjust point size based on plot type
-          globe.pointRadius(plotType === 'clusters' ? 1.5 : 0.2);
-          globe.pointResolution(plotType === 'clusters' ? 32 : 6);
+          globe.pointRadius(plotType === "clusters" ? 1.5 : 0.2);
+          globe.pointResolution(plotType === "clusters" ? 32 : 6);
 
           let data;
-          if (plotType === 'clusters') {
+          if (plotType === "clusters") {
             await fetch("static/clusters.json")
               .then((response) => response.json())
               .then((clusterData) => {
@@ -299,7 +305,8 @@
                     ...point,
                     abundance1: point.abundance,
                     abundance2: clusterData[element2][index].abundance,
-                    ratio: point.abundance / clusterData[element2][index].abundance,
+                    ratio:
+                      point.abundance / clusterData[element2][index].abundance,
                   }));
                 } else {
                   data = clusterData[element1];
@@ -350,19 +357,17 @@
           currentData = data;
 
           // Update info panel
-          const infoPanel = document.getElementById("info-panel");
-          infoPanel.innerHTML = `
-          <div>Points: ${data.length}</div>
-          <div>Range: ${min.toFixed(2)} - ${max.toFixed(2)}</div>
-        `;
+          //   infoPanel.innerHTML = `
+          //   <div>Points: ${data.length}</div>
+          //   <div>Range: ${min.toFixed(2)} - ${max.toFixed(2)}</div>
+          // `;
 
           // Update histogram with current data for date-specific views
-          if (plotType === 'points' && !element2) {
+          if (plotType === "points" && !element2) {
             updateHistogram(element1, data);
           } else {
             updateHistogram(element1);
           }
-
         } catch (error) {
           console.error("Error fetching data:", error);
           alert("Error loading data");
@@ -387,15 +392,17 @@
           const selectedDate = document.getElementById("dateFilter").value;
           const plotType = document.getElementById("plotType").value;
           const secondElement = document.getElementById("secondElement").value;
-          
+
           let data;
           if (customData) {
             // Calculate histogram from the current data
-            const abundances = customData.map(d => d.abundance);
+            const abundances = customData.map((d) => d.abundance);
             data = calculateHistogram(abundances);
-          } else if (plotType === 'points' && !secondElement) {
+          } else if (plotType === "points") {
             // Fetch real-time histogram data for specific date
-            const url = `/histogram?element=${element}${selectedDate ? '&date=' + selectedDate : ''}`;
+            const url = `/histogram?element=${element}${
+              selectedDate ? "&date=" + selectedDate : ""
+            }`;
             const response = await fetch(url);
             data = await response.json();
           } else {
@@ -460,7 +467,7 @@
             .attr("text-anchor", "middle")
             .attr("fill", "white")
             .attr("font-size", "10px")
-            .text(d => `${d.toFixed(1)}%`);
+            .text((d) => `${d.toFixed(1)}%`);
 
           // Add x-axis
           svg
@@ -479,7 +486,6 @@
             .append("g")
             .attr("class", "axis")
             .call(d3.axisLeft(y).tickFormat((d) => d + "%"));
-
         } catch (error) {
           console.error("Error updating histogram:", error);
         }
@@ -488,13 +494,13 @@
       // Add helper function to calculate histogram
       function calculateHistogram(values) {
         const bins = Array(10).fill(0);
-        values.forEach(value => {
+        values.forEach((value) => {
           const binIndex = Math.min(Math.floor(value / 5), 9);
           bins[binIndex]++;
         });
         // Convert to percentages
         const total = values.length;
-        return bins.map(count => (count / total) * 100);
+        return bins.map((count) => (count / total) * 100);
       }
 
       // Remove the date filter change event listener since we only want updates on plot
@@ -505,12 +511,12 @@
         const element1 = document.getElementById("primaryElement").value;
         const element2 = document.getElementById("secondElement").value;
         const plotType = document.getElementById("plotType").value;
-        
+
         if (!element1) {
           alert("Please select a primary element");
           return;
         }
-        
+
         fetchData(element1, element2 || null, plotType);
       });
 
@@ -543,7 +549,7 @@
           const response = await fetch("../static/dates.json");
           availableDates = await response.json();
           const dateSelect = document.getElementById("dateFilter");
-          availableDates.forEach(date => {
+          availableDates.forEach((date) => {
             const option = document.createElement("option");
             option.value = date;
             option.text = date;
@@ -559,17 +565,109 @@
         const plotType = document.getElementById("plotType").value;
         const secondElement = document.getElementById("secondElement").value;
         const dateSelector = document.getElementById("dateSelector");
-        
-        dateSelector.style.display = 
-          (plotType === 'points' && !secondElement) ? 'block' : 'none';
+
+        dateSelector.style.display =
+          // plotType === "points" && !secondElement ? "block" : "none";
+          plotType === "points" ? "block" : "none";
       }
 
       // Add event listeners for control updates
-      document.getElementById("plotType").addEventListener("change", updateControlsVisibility);
-      document.getElementById("secondElement").addEventListener("change", updateControlsVisibility);
+      document
+        .getElementById("plotType")
+        .addEventListener("change", updateControlsVisibility);
+      document
+        .getElementById("secondElement")
+        .addEventListener("change", updateControlsVisibility);
 
       // Initialize dates when page loads
       loadDates();
+
+      // info panel code
+      if (true) {
+        const camera = globe.camera();
+        const controls = globe.controls();
+        const infoPanel = document.getElementById("info-panel");
+
+        const UPDATE_INTERVAL = 1000;
+        let lastUpdateTime = 0;
+
+        // const raycaster = new THREE.Raycaster();
+        // const mouse = new THREE.Vector2();
+        // // let lastUpdateTime = 0; // Initialize timestamp
+
+        // document.addEventListener("mousemove", (event) => {
+        //   const currentTime = Date.now();
+
+        //   // Check if 1 second has passed since the last update
+        //   if (currentTime - lastUpdateTime < 1000) {
+        //     return; // Skip processing if cooldown is active
+        //   }
+
+        //   lastUpdateTime = currentTime; // Update the last processed time
+
+        //   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        //   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        //   raycaster.setFromCamera(mouse, camera);
+        //   const intersects = raycaster.intersectObject(globeMesh); // Assuming 'globeMesh' is the sphere
+
+        //   if (intersects.length > 0) {
+        //     const point = intersects[0].point;
+        //     const { lat, lon } = getLatLong(point);
+        //     console.log(`Latitude: ${lat}, Longitude: ${lon}`);
+        //   }
+        // });
+
+        // Function to update the info panel
+        function updateInfoPanel() {
+          // const zoomLevel = camera.position.length(); // Camera distance (proxy for zoom)
+          // const spatialResolution = 1 / zoomLevel;    // Example resolution calculation
+
+          const cursorPos = controls.target; // Cursor position in world space (globe center point)
+
+          const fov = camera.fov * (Math.PI / 180); // Convert FOV to radians
+          const distance = camera.position.length();
+          const projected_dim = 2 * Math.tan(fov / 2) * distance;
+          const resolution =
+            (2 * Math.tan(fov / 2) * distance) / window.innerWidth;
+
+          const radius = cursorPos.length(); // Distance from center (assuming normalized globe)
+
+          // Convert to spherical coordinates
+          const lat = Math.asin(cursorPos.y / radius) * (180 / Math.PI); // Latitude in degrees
+          const lon = Math.atan2(cursorPos.z, cursorPos.x) * (180 / Math.PI); // Longitude in degrees
+
+          // Display relevant information
+          infoPanel.innerHTML = `
+      <strong>Globe Info:</strong><br>
+      Field of view: ${camera.fov.toFixed(2)} deg<br>
+      Distance from centre : ${distance.toFixed(2)} units<br>
+      Projected diameter: ${projected_dim.toFixed(5)} units<br>      
+      Window size: ${window.innerWidth} pixels<br> 
+      Number of points plotted: ${currentData.length}<br>     
+      Updated every ${UPDATE_INTERVAL} ms
+    `;
+
+          // Spatial Resolution: ${resolution.toFixed(5)} units/pixel<br>
+
+          // console.log("updating ${distance.toFixed(2)}");
+          // Cursor Position: (X: ${cursorPos.x.toFixed(2)}, Y: ${cursorPos.y.toFixed(2)}, Z: ${cursorPos.z.toFixed(2)}) <br>
+        }
+
+        // Animation loop with controlled updates
+        function animate(time) {
+          requestAnimationFrame(animate);
+          controls.update(); // Update camera controls
+
+          if (time - lastUpdateTime > UPDATE_INTERVAL) {
+            updateInfoPanel();
+            console.log(2);
+            lastUpdateTime = time;
+          }
+        }
+
+        animate(0); // Start animation loop
+      }
     </script>
   </body>
 </html>
