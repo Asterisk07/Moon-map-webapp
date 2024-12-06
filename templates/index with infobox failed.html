@@ -180,10 +180,10 @@
         .showAtmosphere(false);
 
       // Add method to set custom heatmap texture
-      //   function setHeatmapTexture(textureUrl) {
-      //     globe.globeMaterial().map = new THREE.TextureLoader().load(textureUrl);
-      //     globe.globeMaterial().needsUpdate = true;
-      //   }
+    //   function setHeatmapTexture(textureUrl) {
+    //     globe.globeMaterial().map = new THREE.TextureLoader().load(textureUrl);
+    //     globe.globeMaterial().needsUpdate = true;
+    //   }
       if (true) {
         // new heatmap code
         //   Moon Heatmap Optimization Functions
@@ -225,6 +225,7 @@
           console.log(`Heatmap data saved to ${a.download}`);
         }
 
+       
         // Function to load heatmap data from a file
         async function loadHeatmapData(file) {
           return new Promise((resolve, reject) => {
@@ -579,161 +580,151 @@
       }
 
       // Heatmap Texture Generation Functions
-      async function generateHeatmapTexture(data, element1, element2 = null) {
-        return new Promise((resolve, reject) => {
-          const canvas = document.createElement("canvas");
-          canvas.width = 2048; // High-resolution texture
-          canvas.height = 1024; // 2:1 aspect ratio for globe mapping
-          const ctx = canvas.getContext("2d");
+async function generateHeatmapTexture(data, element1, element2 = null) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2048;  // High-resolution texture
+    canvas.height = 1024; // 2:1 aspect ratio for globe mapping
+    const ctx = canvas.getContext('2d');
 
-          // Create a radial gradient background
-          const gradient = ctx.createRadialGradient(
-            canvas.width / 2,
-            canvas.height / 2,
-            0,
-            canvas.width / 2,
-            canvas.height / 2,
-            canvas.width / 2
-          );
-          gradient.addColorStop(0, "rgba(0,0,255,0.1)"); // Low intensity blue
-          gradient.addColorStop(1, "rgba(255,0,0,0.3)"); // High intensity red
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Create a radial gradient background
+    const gradient = ctx.createRadialGradient(
+      canvas.width / 2, canvas.height / 2, 0,
+      canvas.width / 2, canvas.height / 2, canvas.width / 2
+    );
+    gradient.addColorStop(0, 'rgba(0,0,255,0.1)');    // Low intensity blue
+    gradient.addColorStop(1, 'rgba(255,0,0,0.3)');    // High intensity red
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          // Find min and max values for normalization
-          const values = data
-            .map((point) => point.value)
-            .filter((v) => !isNaN(v));
-          const minValue = Math.min(...values);
-          const maxValue = Math.max(...values);
+    // Find min and max values for normalization
+    const values = data.map(point => point.value).filter(v => !isNaN(v));
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
 
-          // Project data points onto the 2D texture
-          data.forEach((point) => {
-            // Normalize value between 0 and 1
-            const normalizedValue =
-              values.length > 0
-                ? (point.value - minValue) / (maxValue - minValue)
-                : 0.5;
+    // Project data points onto the 2D texture
+    data.forEach(point => {
+      // Normalize value between 0 and 1
+      const normalizedValue = values.length > 0 
+        ? (point.value - minValue) / (maxValue - minValue)
+        : 0.5;
 
-            // Convert lat/lng to canvas x/y
-            const x = ((point.lng + 180) / 360) * canvas.width;
-            const y = ((90 - point.lat) / 180) * canvas.height;
+      // Convert lat/lng to canvas x/y
+      const x = ((point.lng + 180) / 360) * canvas.width;
+      const y = ((90 - point.lat) / 180) * canvas.height;
 
-            // Draw point with intensity based on normalized value
-            const intensity = Math.min(normalizedValue, 1);
-            ctx.beginPath();
-            ctx.fillStyle = `rgba(255,0,0,${intensity * 0.7})`;
-            ctx.arc(x, y, 5, 0, Math.PI * 2);
-            ctx.fill();
-          });
+      // Draw point with intensity based on normalized value
+      const intensity = Math.min(normalizedValue, 1);
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(255,0,0,${intensity * 0.7})`;
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    });
 
-          // Convert canvas to image
-          const img = new Image();
-          img.onload = () => {
-            resolve(img.src);
-          };
-          img.onerror = reject;
-          img.src = canvas.toDataURL("image/png");
-        });
-      }
+    // Convert canvas to image
+    const img = new Image();
+    img.onload = () => {
+      resolve(img.src);
+    };
+    img.onerror = reject;
+    img.src = canvas.toDataURL('image/png');
+  });
+}
 
-      // Function to set heatmap texture on globe
-      function setHeatmapTexture(textureUrl) {
-        // Ensure THREE is available
-        if (typeof THREE === "undefined") {
-          console.error("THREE.js not loaded");
-          return;
-        }
+// Function to set heatmap texture on globe
+function setHeatmapTexture(textureUrl) {
+  // Ensure THREE is available
+  if (typeof THREE === 'undefined') {
+    console.error('THREE.js not loaded');
+    return;
+  }
 
-        // Create texture loader
-        const textureLoader = new THREE.TextureLoader();
+  // Create texture loader
+  const textureLoader = new THREE.TextureLoader();
+  
+  // Load texture
+  textureLoader.load(
+    textureUrl, 
+    (texture) => {
+      // Successfully loaded texture
+      globe.globeMaterial().map = texture;
+      globe.globeMaterial().needsUpdate = true;
+    },
+    undefined, // onProgress (optional)
+    (error) => {
+      // Handle any errors in texture loading
+      console.error('Error loading heatmap texture:', error);
+    }
+  );
+}
 
-        // Load texture
-        textureLoader.load(
-          textureUrl,
-          (texture) => {
-            // Successfully loaded texture
-            globe.globeMaterial().map = texture;
-            globe.globeMaterial().needsUpdate = true;
-          },
-          undefined, // onProgress (optional)
-          (error) => {
-            // Handle any errors in texture loading
-            console.error("Error loading heatmap texture:", error);
-          }
+// Modify existing fetchData to use new texture generation
+async function fetchData(element1, element2 = null) {
+  if (isProcessing) return;
+  isProcessing = true;
+  updateStatus("Fetching data...");
+  document.querySelector(".loading").style.display = "block";
+
+  try {
+    console.time("fetchData Total Time");
+
+    // Prepare URL
+    const url = element2
+      ? `/ratio?element=${element1}&element2=${element2}`
+      : `/abundance?element=${element1}`;
+
+    // Fetch data
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!data || !Array.isArray(data) || !data.length) {
+      updateStatus("No data available");
+      currentData = [];
+      return;
+    }
+
+    updateStatus("Processing data...");
+
+    // Transform data
+    currentData = data.map((d) => ({
+      lat: parseFloat(d.lat),
+      lng: parseFloat(d.long || d.lng || 0),
+      value: parseFloat(element2 ? d.ratio : d.abundance),
+      element: d.element,
+      element1: d.element1,
+      element2: d.element2,
+      abundance: parseFloat(d.abundance),
+      abundance1: parseFloat(d.abundance1),
+      abundance2: parseFloat(d.abundance2),
+      ratio: parseFloat(d.ratio),
+      date: d.date,
+    }));
+
+    // Generate and set heatmap texture
+    if (currentData.length > 0) {
+      try {
+        const heatmapTexture = await generateHeatmapTexture(
+          currentData,
+          element1,
+          element2
         );
+        setHeatmapTexture(heatmapTexture);
+      } catch (textureError) {
+        console.error('Failed to generate heatmap texture:', textureError);
+        updateStatus('Failed to generate heatmap');
       }
+    }
 
-      // Modify existing fetchData to use new texture generation
-      async function fetchData(element1, element2 = null) {
-        if (isProcessing) return;
-        isProcessing = true;
-        updateStatus("Fetching data...");
-        document.querySelector(".loading").style.display = "block";
-
-        try {
-          console.time("fetchData Total Time");
-
-          // Prepare URL
-          const url = element2
-            ? `/ratio?element=${element1}&element2=${element2}`
-            : `/abundance?element=${element1}`;
-
-          // Fetch data
-          const response = await fetch(url);
-          const data = await response.json();
-
-          if (!data || !Array.isArray(data) || !data.length) {
-            updateStatus("No data available");
-            currentData = [];
-            return;
-          }
-
-          updateStatus("Processing data...");
-
-          // Transform data
-          currentData = data.map((d) => ({
-            lat: parseFloat(d.lat),
-            lng: parseFloat(d.long || d.lng || 0),
-            value: parseFloat(element2 ? d.ratio : d.abundance),
-            element: d.element,
-            element1: d.element1,
-            element2: d.element2,
-            abundance: parseFloat(d.abundance),
-            abundance1: parseFloat(d.abundance1),
-            abundance2: parseFloat(d.abundance2),
-            ratio: parseFloat(d.ratio),
-            date: d.date,
-          }));
-
-          // Generate and set heatmap texture
-          if (currentData.length > 0) {
-            try {
-              const heatmapTexture = await generateHeatmapTexture(
-                currentData,
-                element1,
-                element2
-              );
-              setHeatmapTexture(heatmapTexture);
-            } catch (textureError) {
-              console.error(
-                "Failed to generate heatmap texture:",
-                textureError
-              );
-              updateStatus("Failed to generate heatmap");
-            }
-          }
-
-          // Rest of your existing fetchData logic...
-          // Update color scale, legend, etc.
-        } catch (error) {
-          console.error("Error in fetchData:", error);
-          updateStatus("Error loading data");
-        } finally {
-          isProcessing = false;
-          document.querySelector(".loading").style.display = "none";
-        }
-      }
+    // Rest of your existing fetchData logic...
+    // Update color scale, legend, etc.
+  } catch (error) {
+    console.error("Error in fetchData:", error);
+    updateStatus("Error loading data");
+  } finally {
+    isProcessing = false;
+    document.querySelector(".loading").style.display = "none";
+  }
+}
       // Initialize color scale
       const colorScale = d3
         .scaleSequential()
