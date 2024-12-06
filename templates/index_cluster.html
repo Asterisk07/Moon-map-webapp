@@ -140,6 +140,19 @@
           <option value="Na">Na</option>
         </select>
       </div>
+      <div>
+        <select id="plotType">
+          <option value="clusters">Show Clusters</option>
+          <option value="points">Show All Points</option>
+        </select>
+      </div>
+      <div id="dateSelector" style="display: none;">
+        <select id="dateFilter">
+          <option value="">All Dates</option>
+          <!-- Will be populated dynamically -->
+        </select>
+      </div>
+      <button id="plotData">Plot Data</button>
       <button id="clearMap">Clear Map</button>
     </div>
 
@@ -162,6 +175,7 @@
     <script>
       let currentData = [];
       let histogramData = null;
+      let availableDates = [];
 
       // Fix Globe initialization
       const globe = new Globe(document.getElementById("globeViz"))
@@ -175,7 +189,7 @@
         .pointRadius(1.5) // .pointRadius(0.5)
         .pointColor(() => "#ff0000")
         .pointAltitude(0) // Set to 0 to make markers flat on surface
-        .pointResolution(64) // Increase point resolution for smoother appearance
+        .pointResolution(32) // Increase point resolution for smoother appearance
         .pointLabel(
           (d) => `
         <div style="
@@ -262,40 +276,40 @@
       }
 
       // Fetch and display data
-      async function fetchData(element1, element2 = null) {
+      async function fetchData(element1, element2 = null, plotType = 'clusters') {
         document.querySelector(".loading").style.display = "block";
 
         try {
+          const selectedDate = document.getElementById("dateFilter").value;
           const url = element2
-            ? `/ratio?element=${element1}&element2=${element2}`
-            : `/abundance?element=${element1}`;
+            ? `/ratio?element=${element1}&element2=${element2}&plotType=${plotType}`
+            : `/abundance?element=${element1}&plotType=${plotType}${selectedDate ? '&date=' + selectedDate : ''}`;
 
-          // const response = await fetch(url);
-          // const data = await response.json();
+          // Adjust point size based on plot type
+          globe.pointRadius(plotType === 'clusters' ? 1.5 : 0.2);
+          globe.pointResolution(plotType === 'clusters' ? 32 : 6);
 
-          let clusterData;
-
-          await fetch("static/clusters.json") // Path relative to the location of index.html
-            .then((response) => response.json()) // Parse the response as JSON
-            .then((data) => {
-              if (element2) {
-                clusterData = data[element1].map((point, index) => {
-                  return {
-                    ...point, // Copy all existing properties
-
+          let data;
+          if (plotType === 'clusters') {
+            await fetch("static/clusters.json")
+              .then((response) => response.json())
+              .then((clusterData) => {
+                if (element2) {
+                  data = clusterData[element1].map((point, index) => ({
+                    ...point,
                     abundance1: point.abundance,
-                    abundance2: data[element2][index].abundance,
-                    ratio: point.abundance / data[element2][index].abundance,
-                  };
-                });
-              } else {
-                clusterData = data[element1];
-              }
-            })
+                    abundance2: clusterData[element2][index].abundance,
+                    ratio: point.abundance / clusterData[element2][index].abundance,
+                  }));
+                } else {
+                  data = clusterData[element1];
+                }
+              });
+          } else {
+            const response = await fetch(url);
+            data = await response.json();
+          }
 
-            .catch((error) => console.error("Error fetching JSON:", error));
-
-          let data = clusterData;
           if (!data.length) {
             alert("No data available for selected elements");
             return;
@@ -342,10 +356,13 @@
           <div>Range: ${min.toFixed(2)} - ${max.toFixed(2)}</div>
         `;
 
-          if (!histogramData) {
-            await loadHistogramData();
+          // Update histogram with current data for date-specific views
+          if (plotType === 'points' && !element2) {
+            updateHistogram(element1, data);
+          } else {
+            updateHistogram(element1);
           }
-          updateHistogram(element1);
+
         } catch (error) {
           console.error("Error fetching data:", error);
           alert("Error loading data");
@@ -364,92 +381,142 @@
         }
       }
 
-      // Create histogram visualization
-      function updateHistogram(element) {
-        if (!histogramData || !histogramData[element]) return;
+      // Remove or modify the first updateHistogram function and keep only this one
+      async function updateHistogram(element, customData = null) {
+        try {
+          const selectedDate = document.getElementById("dateFilter").value;
+          const plotType = document.getElementById("plotType").value;
+          const secondElement = document.getElementById("secondElement").value;
+          
+          let data;
+          if (customData) {
+            // Calculate histogram from the current data
+            const abundances = customData.map(d => d.abundance);
+            data = calculateHistogram(abundances);
+          } else if (plotType === 'points' && !secondElement) {
+            // Fetch real-time histogram data for specific date
+            const url = `/histogram?element=${element}${selectedDate ? '&date=' + selectedDate : ''}`;
+            const response = await fetch(url);
+            data = await response.json();
+          } else {
+            // Use pre-calculated histogram data for clusters
+            if (!histogramData || !histogramData[element]) return;
+            data = histogramData[element];
+          }
 
-        // Clear previous histogram
-        d3.select("#histogramChart").html("");
+          // Clear previous histogram
+          d3.select("#histogramChart").html("");
 
-        const data = histogramData[element];
-        const margin = { top: 10, right: 20, bottom: 50, left: 50 }; // increased left margin
-        const width = 400 - margin.left - margin.right;
-        const height = 250 - margin.top - margin.bottom;
+          const margin = { top: 10, right: 20, bottom: 50, left: 50 };
+          const width = 400 - margin.left - margin.right;
+          const height = 250 - margin.top - margin.bottom;
 
-        const svg = d3
-          .select("#histogramChart")
-          .append("svg")
-          .attr("width", width + margin.left + margin.right)
-          .attr("height", height + margin.top + margin.bottom)
-          .append("g")
-          .attr("transform", `translate(${margin.left},${margin.top})`);
+          const svg = d3
+            .select("#histogramChart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        // Create bin labels
-        const binLabels = Array.from(
-          { length: 10 },
-          (_, i) => `${i * 5}% - ${(i + 1) * 5}%`
-        );
+          // Create bin labels
+          const binLabels = Array.from(
+            { length: 10 },
+            (_, i) => `${i * 5}% - ${(i + 1) * 5}%`
+          );
 
-        const x = d3
-          .scaleBand()
-          .domain(binLabels)
-          .range([0, width])
-          .padding(0.1);
+          const x = d3
+            .scaleBand()
+            .domain(binLabels)
+            .range([0, width])
+            .padding(0.1);
 
-        const y = d3
-          .scaleLinear()
-          .domain([0, d3.max(data)])
-          .range([height, 0]);
+          const y = d3
+            .scaleLinear()
+            .domain([0, 100]) // Fixed domain from 0 to 100%
+            .range([height, 0]);
 
-        // Add bars
-        svg
-          .selectAll("rect")
-          .data(data)
-          .enter()
-          .append("rect")
-          .attr("class", "histogram-bar")
-          .attr("x", (d, i) => x(binLabels[i]))
-          .attr("y", (d) => y(d))
-          .attr("width", x.bandwidth())
-          .attr("height", (d) => height - y(d));
+          // Add bars
+          svg
+            .selectAll("rect")
+            .data(data)
+            .enter()
+            .append("rect")
+            .attr("class", "histogram-bar")
+            .attr("x", (d, i) => x(binLabels[i]))
+            .attr("y", (d) => y(d))
+            .attr("width", x.bandwidth())
+            .attr("height", (d) => height - y(d));
 
-        // Add x-axis
-        svg
-          .append("g")
-          .attr("class", "axis")
-          .attr("transform", `translate(0,${height})`)
-          .call(d3.axisBottom(x))
-          .selectAll("text")
-          .style("text-anchor", "end")
-          .attr("dx", "-.8em")
-          .attr("dy", ".15em")
-          .attr("transform", "rotate(-45)");
+          // Add percentage labels on top of bars
+          svg
+            .selectAll(".bar-label")
+            .data(data)
+            .enter()
+            .append("text")
+            .attr("class", "bar-label")
+            .attr("x", (d, i) => x(binLabels[i]) + x.bandwidth() / 2)
+            .attr("y", (d) => y(d) - 5)
+            .attr("text-anchor", "middle")
+            .attr("fill", "white")
+            .attr("font-size", "10px")
+            .text(d => `${d.toFixed(1)}%`);
 
-        // Add y-axis with percentage
-        svg
-          .append("g")
-          .attr("class", "axis")
-          .call(d3.axisLeft(y).tickFormat((d) => d + "%"));
+          // Add x-axis
+          svg
+            .append("g")
+            .attr("class", "axis")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x))
+            .selectAll("text")
+            .style("text-anchor", "end")
+            .attr("dx", "-.8em")
+            .attr("dy", ".15em")
+            .attr("transform", "rotate(-45)");
 
-        // Removed x-axis label
+          // Add y-axis with percentage
+          svg
+            .append("g")
+            .attr("class", "axis")
+            .call(d3.axisLeft(y).tickFormat((d) => d + "%"));
+
+        } catch (error) {
+          console.error("Error updating histogram:", error);
+        }
       }
 
-      // Event Listeners
-      document
-        .getElementById("primaryElement")
-        .addEventListener("change", (e) => {
-          const element1 = e.target.value;
-          const element2 = document.getElementById("secondElement").value;
-          if (element1) fetchData(element1, element2 || null);
+      // Add helper function to calculate histogram
+      function calculateHistogram(values) {
+        const bins = Array(10).fill(0);
+        values.forEach(value => {
+          const binIndex = Math.min(Math.floor(value / 5), 9);
+          bins[binIndex]++;
         });
+        // Convert to percentages
+        const total = values.length;
+        return bins.map(count => (count / total) * 100);
+      }
 
-      document
-        .getElementById("secondElement")
-        .addEventListener("change", (e) => {
-          const element1 = document.getElementById("primaryElement").value;
-          const element2 = e.target.value;
-          if (element1) fetchData(element1, element2 || null);
-        });
+      // Remove the date filter change event listener since we only want updates on plot
+      // document.getElementById("dateFilter").addEventListener("change"...)
+
+      // Event Listeners
+      document.getElementById("plotData").addEventListener("click", () => {
+        const element1 = document.getElementById("primaryElement").value;
+        const element2 = document.getElementById("secondElement").value;
+        const plotType = document.getElementById("plotType").value;
+        
+        if (!element1) {
+          alert("Please select a primary element");
+          return;
+        }
+        
+        fetchData(element1, element2 || null, plotType);
+      });
+
+      // Remove or comment out the previous element change listeners
+      // document.getElementById("primaryElement").addEventListener("change"...)
+      // document.getElementById("secondElement").addEventListener("change"...)
 
       document.getElementById("clearMap").addEventListener("click", () => {
         globe.pointsData([]);
@@ -469,6 +536,40 @@
 
       // Load histogram data when page loads
       loadHistogramData();
+
+      // Load dates when page loads
+      async function loadDates() {
+        try {
+          const response = await fetch("../static/dates.json");
+          availableDates = await response.json();
+          const dateSelect = document.getElementById("dateFilter");
+          availableDates.forEach(date => {
+            const option = document.createElement("option");
+            option.value = date;
+            option.text = date;
+            dateSelect.appendChild(option);
+          });
+        } catch (error) {
+          console.error("Error loading dates:", error);
+        }
+      }
+
+      // Update controls visibility
+      function updateControlsVisibility() {
+        const plotType = document.getElementById("plotType").value;
+        const secondElement = document.getElementById("secondElement").value;
+        const dateSelector = document.getElementById("dateSelector");
+        
+        dateSelector.style.display = 
+          (plotType === 'points' && !secondElement) ? 'block' : 'none';
+      }
+
+      // Add event listeners for control updates
+      document.getElementById("plotType").addEventListener("change", updateControlsVisibility);
+      document.getElementById("secondElement").addEventListener("change", updateControlsVisibility);
+
+      // Initialize dates when page loads
+      loadDates();
     </script>
   </body>
 </html>

@@ -10,8 +10,8 @@ from time import perf_counter_ns
 
 # Removed unused imports like subprocess
 
-FETCH_LIMIT = 2000
-# FETCH_LIMIT = None
+# FETCH_LIMIT = 2000
+FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
 # DATABASE_PATH = 'database/abundances_new.db'
@@ -198,21 +198,35 @@ def normalize_longitude(lng):
 @app.route('/abundance', methods=['GET'])
 def get_abundance():
     element = request.args.get('element')
+    plot_type = request.args.get('plotType', 'clusters')
+    date = request.args.get('date')
 
     if not element or element == 'undefined':
         return jsonify({"error": "Element parameter is required"}), 400
 
     try:
-        query = """
-            SELECT lat, long, abundance, element, date
-            FROM abundances
-            WHERE element = ?
-        """
-        result = query_db(query, (element,))
+        if date:
+            query = """
+                SELECT lat, long, abundance, element, date
+                FROM abundances
+                WHERE element = ? AND date = ?
+            """
+            result = query_db(query, (element, date))
+        else:
+            query = """
+                SELECT lat, long, abundance, element, date
+                FROM abundances
+                WHERE element = ?
+            """
+            result = query_db(query, (element,))
 
         if not result:
             print(f"No data found for element: {element}")
             return jsonify([])
+
+        # Only cluster if plot_type is 'clusters'
+        if plot_type == 'clusters':
+            result = cluster_data(result)
 
         print(f"Found {len(result)} points for {element}")
         return jsonify(result)
@@ -221,11 +235,11 @@ def get_abundance():
         print(f"Error in get_abundance: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/ratio', methods=['GET'])
 def get_ratio():
     element1 = request.args.get('element')
     element2 = request.args.get('element2')
+    plot_type = request.args.get('plotType', 'clusters')
 
     if not element1 or not element2:
         return jsonify({"error": "Both elements are required"}), 400
@@ -253,11 +267,57 @@ def get_ratio():
             print(f"No data found for ratio {element1}/{element2}")
             return jsonify([])
 
+        # Only cluster if plot_type is 'clusters'
+        if plot_type == 'clusters':
+            result = cluster_data(result)
+
         print(f"Found {len(result)} ratio points")
         return jsonify(result)
 
     except Exception as e:
         print(f"Error in get_ratio: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/histogram', methods=['GET'])
+def get_histogram():
+    element = request.args.get('element')
+    date = request.args.get('date')
+
+    if not element:
+        return jsonify({"error": "Element parameter is required"}), 400
+
+    try:
+        if date:
+            query = """
+                SELECT abundance
+                FROM abundances
+                WHERE element = ? AND date = ?
+            """
+            result = query_db(query, (element, date))
+        else:
+            query = """
+                SELECT abundance
+                FROM abundances
+                WHERE element = ?
+            """
+            result = query_db(query, (element,))
+
+        if not result:
+            return jsonify([0] * 10)  # Return empty histogram
+
+        # Calculate histogram bins (10 bins)
+        abundances = [r['abundance'] for r in result]
+        total = len(abundances)
+        if total == 0:
+            return jsonify([0] * 10)
+
+        hist, _ = np.histogram(abundances, bins=10, range=(0, 50))
+        # Convert to percentages
+        hist = (hist / total) * 100
+        return jsonify(hist.tolist())
+
+    except Exception as e:
+        print(f"Error generating histogram: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
