@@ -463,6 +463,7 @@
           try {
             let element1 = document.getElementById("primaryElement").value;
             let element2 = document.getElementById("secondElement").value;
+            console.log("getting nearby points of ", element1);
             if (
               element1 === undefined ||
               element1 === null ||
@@ -474,6 +475,7 @@
               `/getnear?lat=${lat}&lng=${lng}&element=${element1}&radius=15.0`
             );
             const data = await response.json();
+            console.log("fetched data of element", data[0]);
 
             if (!data.length) {
               console.log("No data available for selected elements");
@@ -712,6 +714,7 @@
         // Add debug output
         console.log("Finding nearest point to:", { lat, lng });
         console.log("Found point:", nearest);
+        console.log("nearest eleement:", nearest);
         console.log("Distance:", minDist.toFixed(2), "km");
 
         return nearest;

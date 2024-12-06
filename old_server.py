@@ -10,8 +10,8 @@ from time import perf_counter_ns
 
 # Removed unused imports like subprocess
 
-# FETCH_LIMIT = 25000
-FETCH_LIMIT = None
+FETCH_LIMIT = 2000
+# FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
 # DATABASE_PATH = 'database/abundances_new.db'

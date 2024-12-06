@@ -133,14 +133,20 @@ if True:
 
     # Create a KDTree for each element
     element_trees = {}
+    element_points_dict = {}
 
     # Start the timer to measure the query execution time
     start_time = time.time()
 
     for element in element_list:
+        print("creating for element", element)
+        element_points = [
+            point for point in points if point['element'] == element]
+        element_points_dict[element] = element_points
         element_points = [(point['lat'], point['long'])
-                          for point in points if point['element'] == element]
+                          for point in element_points]
         element_trees[element] = KDTree(np.array(element_points))
+        # print(element_trees[element][0])
 
     end_time = time.time()
     # Print the time taken to perform the query
@@ -156,7 +162,7 @@ def get_nearby_points(query_point, radius_degrees, element):
     tree = element_trees.get(element)
     if tree:
         indices = tree.query_radius(query_array, r=radius_degrees)
-        return [points[i] for i in indices[0]]
+        return [element_points_dict[element][i] for i in indices[0]]
     else:
         return []
 
@@ -169,11 +175,13 @@ def get_nearby_points_endpoint():
     lat = float(request.args.get('lat'))
     lng = float(request.args.get('lng'))
     element = request.args.get('element')
+    print("fetching nearby points of ", element)
     # Default to 2.0 if not provided
     radius = float(request.args.get('radius', 2.0))
 
     # Call the function
     nearby_points = get_nearby_points((lat, lng), radius, element)
+    print(nearby_points[0])
 
     return jsonify(nearby_points)
 
