@@ -381,7 +381,7 @@
       function cartesianToLatLng(x, y, z) {
         const radius = Math.sqrt(x * x + y * y + z * z);
         const lat = (Math.asin(y / radius) * 180) / Math.PI;
-        const lng = (Math.atan2(z, x) * 180) / Math.PI;
+        const lng = 90 - (Math.atan2(z, x) * 180) / Math.PI;
         return { lat, lng: ((lng + 180) % 360) - 180 }; // Normalize longitude
       }
 
@@ -485,13 +485,13 @@
               ? data.map((d) => d.ratio)
               : data.map((d) => d.abundance);
 
-            const min = Math.min(...values);
-            const max = Math.max(...values);
+            // const min = Math.min(...values);
+            // const max = Math.max(...values);
             // const min = 0;
             // const max = 100;
 
-            colorScale.domain([min, max]);
-            updateColorScale(min, max);
+            // colorScale.domain([min, max]);
+            // updateColorScale(min, max);
             // updateLegendLabel(element1, element2);
 
             // Update globe visualization with correct abundance mapping
@@ -517,7 +517,7 @@
             currentData = data;
 
             // Handle the nearby points here (e.g., display them on the globe)
-            console.log("Nearby points:", data.length);
+            console.log("Nearby points:", data.length, data[0].long);
             // showNearestPointInfo({ lat, lng });
           } catch (error) {
             console.error("Error fetching nearby points:", error);
@@ -688,16 +688,22 @@
       function findNearestPoint(lat, lng, data) {
         let nearest = null;
         let minDist = Infinity;
-        const MAX_DISTANCE = 200; // Reduced from 1000 to 200 km for more precise matching
+        const MAX_DISTANCE = Infinity; // Reduced from 1000 to 200 km for more precise matching
 
-        // Normalize input longitude
-        lng = ((lng + 180) % 360) - 180;
-
+        // Normalize input longitude to be between -180 and 180
+        // lng = ((lng + 180) % 360) - 180;
+        lng = lng;
+        console.log("searching point nearest to ", lng);
+        console.log("dealing with ", data.length, "data points");
+        let x = data[0];
+        console.log("Pint data : ", x.lng, "and ", x.long);
         data.forEach((point) => {
           // Use both 'lng' and 'long' properties since data might have either
-          const pointLng = ((point.long || point.lng + 180) % 360) - 180;
-          const dist = getDistance(lat, lng, point.lat, pointLng);
-          if (dist < minDist && dist < MAX_DISTANCE) {
+          // const pointLng = ((point.lng + 180) % 360) - 180; // Correct normalization for point.lng
+          // const pointLng = point.lng; // Correct normalization for point.lng
+
+          const dist = (point.lat - lat) ** 2 + (point.long - lng) ** 2;
+          if (dist < minDist) {
             minDist = dist;
             nearest = point;
           }
@@ -783,7 +789,7 @@
               infoHtml += `<div><b>Date:</b> ${nearest.date}</div>`;
             }
           } else {
-            infoHtml += `<div style="margin-top: 10px; color: #ff9999;">No data points within 1000 km of this location</div>`;
+            infoHtml += `<div style="margin-top: 10px; color: #ff9999;">No data points within range</div>`;
           }
         }
 
