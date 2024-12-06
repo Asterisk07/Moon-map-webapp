@@ -240,53 +240,28 @@ def get_ratio():
     element1 = request.args.get('element')
     element2 = request.args.get('element2')
     plot_type = request.args.get('plotType', 'clusters')
-    date = request.args.get('date')
 
     if not element1 or not element2:
         return jsonify({"error": "Both elements are required"}), 400
 
     try:
-        if date:
-            query = """
-                SELECT 
-                    a1.lat, 
-                    a1.long, 
-                    CAST(a1.abundance AS FLOAT) / CAST(a2.abundance AS FLOAT) as ratio,
-                    a1.abundance as abundance1,
-                    a2.abundance as abundance2,
-                    a1.element as element1,
-                    a2.element as element2,
-                    a1.date
-                FROM abundances a1
-                JOIN abundances a2 
-                ON a1.lat = a2.lat 
-                AND a1.long = a2.long
-                AND a1.date = a2.date
-                WHERE a1.element = ? 
-                AND a2.element = ?
-                AND a1.date = ?
-            """
-            result = query_db(query, (element1, element2, date))
-        else:
-            query = """
-                SELECT 
-                    a1.lat, 
-                    a1.long, 
-                    CAST(a1.abundance AS FLOAT) / CAST(a2.abundance AS FLOAT) as ratio,
-                    a1.abundance as abundance1,
-                    a2.abundance as abundance2,
-                    a1.element as element1,
-                    a2.element as element2,
-                    a1.date
-                FROM abundances a1
-                JOIN abundances a2 
-                ON a1.lat = a2.lat 
-                AND a1.long = a2.long
-                AND a1.date = a2.date
-                WHERE a1.element = ? 
-                AND a2.element = ?
-            """
-            result = query_db(query, (element1, element2))
+        query = """
+            SELECT 
+                a1.lat, 
+                a1.long, 
+                CAST(a1.abundance AS FLOAT) / CAST(a2.abundance AS FLOAT) as ratio,
+                a1.abundance as abundance1,
+                a2.abundance as abundance2,
+                a1.element as element1,
+                a2.element as element2
+            FROM abundances a1
+            JOIN abundances a2 
+            ON a1.lat = a2.lat 
+            AND a1.long = a2.long
+            WHERE a1.element = ? 
+            AND a2.element = ?
+        """
+        result = query_db(query, (element1, element2))
 
         if not result:
             print(f"No data found for ratio {element1}/{element2}")
