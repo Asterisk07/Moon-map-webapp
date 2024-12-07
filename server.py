@@ -1,5 +1,5 @@
 import json
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -7,10 +7,12 @@ from sklearn.cluster import MiniBatchKMeans
 from functools import lru_cache
 import math
 from time import perf_counter_ns
+import os
+import time
 
 # Removed unused imports like subprocess
 
-# FETCH_LIMIT = 2000
+# FETCH_LIMIT = 10000
 FETCH_LIMIT = None
 
 # DATABASE_PATH = 'database/abundances_old.db'
@@ -41,6 +43,9 @@ def fetch_points_for_tile(x, y, zoom):
 app = Flask(__name__)
 # app = Flask(__name__, static_folder='.', static_url_path='')
 
+# Add session configuration
+app.secret_key = 'your-secret-key-here'  # Required for session
+
 
 @app.route('/fetch_points')
 def fetch_points():
@@ -70,7 +75,7 @@ def fetch_points():
 @app.route('/')
 def index():
     # return render_template('index with infobox.html')
-    return render_template('index_cluster.html')
+    return render_template('index.html')
 
 
 @app.route('/run-python', methods=['POST'])
@@ -198,6 +203,7 @@ def normalize_longitude(lng):
 @app.route('/abundance', methods=['GET'])
 def get_abundance():
     element = request.args.get('element')
+    print("fetching for element", element)
     plot_type = request.args.get('plotType', 'clusters')
     date = request.args.get('date')
 
@@ -223,6 +229,8 @@ def get_abundance():
         if not result:
             print(f"No data found for element: {element}")
             return jsonify([])
+        else:
+            print(len(result), "points found for ", element)
 
         # Only cluster if plot_type is 'clusters'
         if plot_type == 'clusters':
@@ -252,7 +260,10 @@ def get_ratio():
                 SELECT 
                     a1.lat, 
                     a1.long, 
-                    CAST(a1.abundance AS FLOAT) / CAST(a2.abundance AS FLOAT) as ratio,
+                    CASE 
+                        WHEN CAST(a2.abundance AS FLOAT) = 0 OR a2.abundance IS NULL THEN NULL
+                        ELSE CAST(a1.abundance AS FLOAT) / CAST(a2.abundance AS FLOAT)
+                    END as ratio,
                     a1.abundance as abundance1,
                     a2.abundance as abundance2,
                     a1.element as element1,
@@ -266,6 +277,9 @@ def get_ratio():
                 WHERE a1.element = ? 
                 AND a2.element = ?
                 AND a1.date = ?
+                AND a1.abundance IS NOT NULL 
+                AND a2.abundance IS NOT NULL 
+                AND CAST(a2.abundance AS FLOAT) != 0
             """
             result = query_db(query, (element1, element2, date))
         else:
@@ -273,7 +287,10 @@ def get_ratio():
                 SELECT 
                     a1.lat, 
                     a1.long, 
-                    CAST(a1.abundance AS FLOAT) / CAST(a2.abundance AS FLOAT) as ratio,
+                    CASE 
+                        WHEN CAST(a2.abundance AS FLOAT) = 0 OR a2.abundance IS NULL THEN NULL
+                        ELSE CAST(a1.abundance AS FLOAT) / CAST(a2.abundance AS FLOAT)
+                    END as ratio,
                     a1.abundance as abundance1,
                     a2.abundance as abundance2,
                     a1.element as element1,
@@ -286,18 +303,25 @@ def get_ratio():
                 AND a1.date = a2.date
                 WHERE a1.element = ? 
                 AND a2.element = ?
+                AND a1.abundance IS NOT NULL 
+                AND a2.abundance IS NOT NULL 
+                AND CAST(a2.abundance AS FLOAT) != 0
             """
             result = query_db(query, (element1, element2))
 
+        # Filter out any remaining NaN or infinite values
+        result = [r for r in result if r['ratio']
+                  is not None and np.isfinite(r['ratio'])]
+
         if not result:
-            print(f"No data found for ratio {element1}/{element2}")
+            print(f"No valid data found for ratio {element1}/{element2}")
             return jsonify([])
 
         # Only cluster if plot_type is 'clusters'
         if plot_type == 'clusters':
             result = cluster_data(result)
 
-        print(f"Found {len(result)} ratio points")
+        print(f"Found {len(result)} valid ratio points")
         return jsonify(result)
 
     except Exception as e:
@@ -346,6 +370,46 @@ def get_histogram():
     except Exception as e:
         print(f"Error generating histogram: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/favourites', methods=['GET', 'POST'])
+def favourites():
+    if request.method == 'GET':
+        # Load initial favourites from file
+        fav_config_path = os.path.join(app.static_folder, 'fav_configs.json')
+        try:
+            with open(fav_config_path, 'r') as f:
+                initial_favourites = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            initial_favourites = []
+
+        # Get user favourites from session
+        user_favourites = session.get('user_favourites', {})
+
+        # Combine initial and user favourites
+        all_favourites = {}
+        for i, fav in enumerate(initial_favourites):
+            all_favourites[f'initial_{i}'] = fav
+        all_favourites.update(user_favourites)
+
+        return jsonify(all_favourites)
+
+    elif request.method == 'POST':
+        new_fav = request.get_json()
+        if not new_fav:
+            return jsonify({'error': 'Invalid data'}), 400
+
+        # Get existing user favourites from session
+        user_favourites = session.get('user_favourites', {})
+
+        # Add new favourite
+        fav_key = f"fav_{int(time.time() * 1000)}"
+        user_favourites[fav_key] = new_fav
+
+        # Update session
+        session['user_favourites'] = user_favourites
+
+        return jsonify({'status': 'success', 'key': fav_key}), 200
 
 
 if __name__ == '__main__':
