@@ -207,7 +207,7 @@
     </div>
 
     <script>
-      let compound_list = ["Plagioclase Feldspar", "Olivine", "Ilmenite"];
+      // let compound_list = ["Plagioclase Feldspar", "Olivine", "Ilmenite"];
       let currentData = [];
       let histogramData = null;
       let availableDates = [];
@@ -522,18 +522,10 @@
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
-          // Create bin labels
-          if (compound_list.includes(element)) {
-            binLabels = Array.from(
-              { length: 10 },
-              (_, i) => `${i * 10}% - ${(i + 1) * 10}%`
-            );
-          } else {
-            binLabels = Array.from(
-              { length: 10 },
-              (_, i) => `${i * 5}% - ${(i + 1) * 5}%`
-            );
-          }
+          binLabels = Array.from(
+            { length: 10 },
+            (_, i) => `${i * 5}% - ${(i + 1) * 5}%`
+          );
 
           const x = d3
             .scaleBand()
