@@ -1,0 +1,42 @@
+1. took basic code from moon lander (tk link) 
+2. tested on less points, but found that site was lagging at 50k points
+3. changed points size, didnt help 
+4. tried with heatmap instead : found that 
+merits
+    - site wasnt lagging when roatating moving etc
+
+demerits
+    - it took very long to construct heatmaps dynamically (10 sec)
+    - could not easily change color scaling of heatmap aas well as maniulate heatmap in globe gl (less control over heatmap)
+    so rejected  heatmap approach
+
+5. clustering :
+ we thought to give two options : displaying 2k clusters and all points
+merits : 
+- clusters laod very fast and scroll very fast too
+
+demerits :
+- no date
+- may mask outliers with high abundances
+- different color scale than pointwise data
+
+implementation :
+- used sklearn to create 2k clusters based on spatial cordiantes (didnt use abundance)
+- then used same corindates for each element to compute mean of abundances in that cluster 
+- plotted cluster point at the location with the computed mean for that element
+
+dates : 
+- precomputed from data and saved as json file (hardcoded) and loaded statically at runtime
+
+
+ 6. histograms :
+ - precomputed for all elementss in clustering python script
+ - loaded statically from json file on frontend
+ -  0 - 50 % range, 10 bins of 5% each (because no element crossed 50% abundances)
+ - didnt plot histograms on ratios because of difficulty of binning a very large dynamic range
+
+
+ 7. 
+ - ratio does not have histogram, it shows histogram of first element
+ - clusters do not have date
+ - 
