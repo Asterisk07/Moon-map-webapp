@@ -168,7 +168,7 @@
     <div id="globeViz"></div>
     <div id="info-panel"></div>
     <div id="histogram">
-      <h4 style="margin: 0 0 10px 0">Element Distribution</h4>
+      <h4 style="margin: 0 0 10px 0"></h4>
       <div id="histogramChart"></div>
     </div>
 
@@ -415,6 +415,9 @@
 
           // Clear previous histogram
           d3.select("#histogramChart").html("");
+          document.querySelector(
+            "#histogram h4"
+          ).textContent = `${element} histogram`;
 
           const margin = { top: 10, right: 20, bottom: 50, left: 50 };
           const width = 400 - margin.left - margin.right;
@@ -519,6 +522,7 @@
           return;
         }
 
+        document.getElementById("histogram").style.display = "block";
         fetchData(element1, element2 || null, plotType);
       });
 
@@ -532,6 +536,7 @@
         document.getElementById("primaryElement").value = "";
         document.getElementById("secondElement").value = "";
         document.getElementById("info-panel").innerHTML = "";
+        document.getElementById("histogram").style.display = "none";
       });
 
       // Initialize color legend
