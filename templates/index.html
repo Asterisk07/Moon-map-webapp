@@ -207,6 +207,7 @@
     </div>
 
     <script>
+      let compound_list = ["Plagioclase Feldspar", "Olivine", "Ilmenite"];
       let currentData = [];
       let histogramData = null;
       let availableDates = [];
@@ -479,6 +480,7 @@
 
       // Remove or modify the first updateHistogram function and keep only this one
       async function updateHistogram(element, customData = null) {
+        let binLabels;
         try {
           const selectedDate = document.getElementById("dateFilter").value;
           const plotType = document.getElementById("plotType").value;
@@ -521,10 +523,17 @@
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
           // Create bin labels
-          const binLabels = Array.from(
-            { length: 10 },
-            (_, i) => `${i * 5}% - ${(i + 1) * 5}%`
-          );
+          if (compound_list.includes(element)) {
+            binLabels = Array.from(
+              { length: 10 },
+              (_, i) => `${i * 10}% - ${(i + 1) * 10}%`
+            );
+          } else {
+            binLabels = Array.from(
+              { length: 10 },
+              (_, i) => `${i * 5}% - ${(i + 1) * 5}%`
+            );
+          }
 
           const x = d3
             .scaleBand()

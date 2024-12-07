@@ -13,6 +13,9 @@ DATABASE_PATH = '../database/abundances.db'
 element_list = ['Fe', 'Ti', 'Ca', 'Si', 'Al', 'Mg', 'Na'] + \
     ['Plagioclase Feldspar', 'Olivine', 'Ilmenite', 'Armalcolite']
 
+
+only_element_list = ['Fe', 'Ti', 'Ca', 'Si', 'Al', 'Mg', 'Na']
+compound_list = ["Plagioclase Feldspar", "Olivine", "Ilmenite"]
 # %%
 FETCH_LIMIT = None
 
@@ -143,8 +146,30 @@ histograms = {}
 bins = np.arange(0, 51, 5)  # 0-10, 10-20, ..., 90-100
 
 # Compute histograms with normalization
-for element, points in element_points_dict.items():
+for element in only_element_list:
     # Extract abundances
+    points = element_points_dict[element]
+    abundances = [entry["abundance"] for entry in points]
+
+    # Compute histogram counts
+    counts, _ = np.histogram(abundances, bins=bins)
+
+    # Normalize counts
+    total = sum(counts)
+    normalized_counts = (
+        counts*100 / total).tolist() if total > 0 else counts.tolist()
+
+    # Store the result in the histogram dictionary
+    histograms[element] = normalized_counts
+
+# use 0-100 bins for compounds
+# Define bins
+bins = np.arange(0, 101, 10)  # 0-10, 10-20, ..., 90-100
+
+# Compute histograms with normalization
+for element in compound_list:
+    # Extract abundances
+    points = element_points_dict[element]
     abundances = [entry["abundance"] for entry in points]
 
     # Compute histogram counts

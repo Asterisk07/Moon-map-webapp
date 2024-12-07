@@ -6,6 +6,7 @@ import sqlite3
 import pandas as pd
 DATABASE_PATH = '../database/abundances.db'
 element_list = ['Fe', 'Ti', 'Ca', 'Si', 'Al', 'Mg', 'Na']
+comp_list = ['Plagioclase Feldspar', 'Olivine', 'Ilmenite', 'Armalcolite']
 
 # %%
 
@@ -18,6 +19,7 @@ element_list = ['Fe', 'Ti', 'Ca', 'Si', 'Al', 'Mg', 'Na']
 # %%
 df2 = pd.read_csv('../data/element_data.csv')
 df3 = pd.read_csv('../data/compound_data.csv')
+df3[comp_list] = df3[comp_list]*100
 
 # %%
 df2.columns
