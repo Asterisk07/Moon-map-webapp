@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Moon Chemical Abundance Map</title>
+    <title>Moon Elemental Abundance Map</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -213,7 +213,9 @@
               : `<div><b>Element:</b> ${d.element}</div>
              <div><b>Abundance:</b> ${d.abundance.toFixed(2)}%</div>`
           }
-          <div><b>Date:</b> ${d.date || "N/A"}</div>
+           ${
+             d.date ? `<div><b>Date:</b> ${d.date}</div>` : "" // Dynamically show the date
+           }
         </div>
       `
         )
