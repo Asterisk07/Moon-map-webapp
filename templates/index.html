@@ -115,7 +115,7 @@
   </head>
   <body>
     <div class="controls">
-      <h3>Moon Elemental Abundance</h3>
+      <h3>Moon Elemental Abundance Map</h3>
       <!-- Add Favourite Configs dropdown -->
       <div>
         <select id="favouriteConfigs">
@@ -235,18 +235,20 @@
           font-size: 12px;
           min-width: 150px;
         ">
-          <div><b>Location:</b></div>
-          <div>Lat: ${d.lat.toFixed(2)}°</div>
-          <div>Long: ${d.lng.toFixed(2)}°</div>
           ${
             d.ratio
-              ? `<div><b>Elements:</b> ${d.element1}/${d.element2}</div>
+              ? `<div style="font-size: 16px;"><b>${d.element1}/${
+                  d.element2
+                }</b></div>
              <div><b>Ratio:</b> ${d.ratio.toFixed(3)}</div>
              <div><b>${d.element1}:</b> ${d.abundance1.toFixed(2)}%</div>
              <div><b>${d.element2}:</b> ${d.abundance2.toFixed(2)}%</div>`
-              : `<div><b>Element:</b> ${d.element}</div>
+              : `<div style="font-size: 16px;"><b>${d.element}</b></div>
              <div><b>Abundance:</b> ${d.abundance.toFixed(2)}%</div>`
           }
+              <div><b>Location:</b></div>
+              <div>Lat: ${d.lat.toFixed(2)}°</div>
+              <div>Long: ${d.lng.toFixed(2)}°</div>
            ${
              d.date ? `<div><b>Date:</b> ${d.date}</div>` : "" // Dynamically show the date
            }
@@ -854,7 +856,7 @@
           updateControlsVisibility();
 
           // Trigger plot data
-          document.getElementById("plotData").click();
+          // document.getElementById("plotData").click();
         }
       }
 

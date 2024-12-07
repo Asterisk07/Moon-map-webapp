@@ -1,0 +1,38 @@
+[
+    {
+      "name": "Mg/Si, Clustered, All Dates",
+      "primaryElement": "Mg",
+      "secondElement": "Si",
+      "plotType": "clusters",
+      "date": ""
+    },
+    {
+      "name": "Mg/Si, All Points, All Dates",
+      "primaryElement": "Mg",
+      "secondElement": "Si",
+      "plotType": "points",
+      "date": ""
+    },
+    {
+      "name": "Al/Si, Clustered, All Dates",
+      "primaryElement": "Al",
+      "secondElement": "Si",
+      "plotType": "clusters",
+      "date": ""
+    },
+    {
+      "name": "Al/Si, All Points, All Dates",
+      "primaryElement": "Al",
+      "secondElement": "Si",
+      "plotType": "points",
+      "date": ""
+    },
+    {
+      "name": "Fe, All Points, 2022-04-22",
+      "primaryElement": "Fe",
+      "secondElement": "",
+      "plotType": "points",
+      "date": "2022-04-22"
+    }
+  ]
+  
